@@ -3,7 +3,7 @@
  * @description Helper functions for creating and working with messages
  */
 
-import type { GroqMessage, GroqMessageRole } from "../../domain/entities";
+import type { GroqMessage, GroqMessageRole } from "../entities";
 
 /**
  * Create a user message

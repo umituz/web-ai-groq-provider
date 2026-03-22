@@ -3,7 +3,7 @@
  * @description Helper functions for error handling
  */
 
-import type { GroqMessage } from "../../domain/entities";
+import type { GroqMessage } from "../entities";
 import { GroqErrorType } from "../constants/error.constants";
 
 /**

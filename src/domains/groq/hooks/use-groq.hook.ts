@@ -6,7 +6,7 @@
 import { useState, useCallback, useMemo } from "react";
 import type { GroqGenerationConfig } from "../interfaces";
 import type { TextGenerationOptions, StreamingCallbacks } from "../interfaces";
-import { textGenerationService, groqHttpClient } from "@umituz/web-ai-groq-provider/groq";
+import { textGenerationService } from "../services";
 import { GroqError } from "../utils/groq-error.util";
 import { getUserFriendlyError } from "../utils/error.util";
 import { DEFAULT_MODELS } from "../constants";

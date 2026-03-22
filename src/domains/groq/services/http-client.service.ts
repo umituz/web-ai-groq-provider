@@ -3,8 +3,8 @@
  * @description Handles all HTTP communication with Groq API
  */
 
-import type { IGroqHttpClient } from "../interfaces"";
-import type { GroqConfig, GroqChatRequest, GroqChatResponse, GroqChatChunk } from "../../domain/entities";
+import type { IGroqHttpClient } from "../interfaces";
+import type { GroqConfig, GroqChatRequest, GroqChatResponse, GroqChatChunk } from "../entities";
 import { GroqError } from "../utils/groq-error.util";
 import { GroqErrorType, mapHttpStatusToErrorType } from "../constants/error.constants";
 import { DEFAULT_BASE_URL, TIMEOUTS } from "../constants/groq.constants";

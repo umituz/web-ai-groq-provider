@@ -3,14 +3,14 @@
  * @description Handles text generation using Groq API
  */
 
-import type { IGroqChatService } from "../interfaces"";
+import type { IGroqChatService } from "../interfaces";
 import type {
   GroqMessage,
   GroqChatRequest,
   TextGenerationOptions,
   StreamingCallbacks,
   StructuredGenerationOptions,
-} from "../interfaces"";
+} from "../interfaces";
 import { groqHttpClient } from "./http-client.service";
 import { GroqError } from "../utils/groq-error.util";
 import { GroqErrorType } from "../constants/error.constants";
