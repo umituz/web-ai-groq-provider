@@ -6,14 +6,14 @@
 import type {
   IChatService,
   IMessageFormatter,
-} from "../../interfaces";
+} from "../interfaces";
 import type {
   ChatMessage,
   ChatConversation,
   SendMessageInput,
   SendMessageResult,
   ChatConfig,
-} from "../../entities";
+} from "../entities";
 import { textGenerationService } from "../../groq/services";
 import { messageFormatter } from "../utils/message-formatter";
 
@@ -36,12 +36,12 @@ class ChatService implements IChatService {
   }
 
   async sendMessage(input: SendMessageInput): Promise<SendMessageResult> {
-    // Create user message
-    const userMessage = messageFormatter.toChatMessage(input.text, "user");
-    userMessage.type = input.type || "text";
-    if (input.imageUrl) {
-      userMessage.imageUrl = input.imageUrl;
-    }
+    // Create user message with all properties
+    const userMessage: ChatMessage = {
+      ...messageFormatter.toChatMessage(input.text, "user"),
+      type: input.type || "text",
+      ...(input.imageUrl && { imageUrl: input.imageUrl }),
+    };
 
     // Generate AI response
     const aiResponse = await this.generateAIResponse(
@@ -101,10 +101,12 @@ class ChatService implements IChatService {
       );
 
       // Format response as chat message
-      const aiMessage = messageFormatter.toChatMessage(response, "assistant");
-      aiMessage.metadata = {
-        companionId,
-        model: "llama-3.3-70b-versatile",
+      const aiMessage: ChatMessage = {
+        ...messageFormatter.toChatMessage(response, "assistant"),
+        metadata: {
+          companionId,
+          model: "llama-3.3-70b-versatile",
+        },
       };
 
       return aiMessage;

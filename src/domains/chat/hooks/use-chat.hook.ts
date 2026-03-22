@@ -8,11 +8,11 @@ import type {
   ChatMessage,
   ChatConfig,
   IChatStorage,
-} from "../../entities";
+} from "../entities";
 import type {
   UseChatOptions,
   UseChatReturn,
-} from "../../interfaces";
+} from "../interfaces";
 import { chatService } from "../services/chat.service";
 
 const isDevelopment =
