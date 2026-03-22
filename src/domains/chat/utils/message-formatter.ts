@@ -5,7 +5,10 @@
 
 import type { IMessageFormatter } from "../interfaces";
 import type { ChatMessage } from "../entities";
-import type { GroqMessage } from "../../groq/interfaces";
+import type { GroqMessage } from "../../groq/entities";
+
+const MESSAGE_ID_PREFIX = "msg-";
+const MESSAGE_ID_USER_SUFFIX = "user";
 
 class MessageFormatter implements IMessageFormatter {
   toGroqMessages(messages: ChatMessage[], systemPrompt?: string): GroqMessage[] {
@@ -35,7 +38,7 @@ class MessageFormatter implements IMessageFormatter {
 
   toChatMessage(content: string, sender: ChatMessage["sender"]): ChatMessage {
     return {
-      id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: `${MESSAGE_ID_PREFIX}${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
       sender,
       content: content.trim(),
       timestamp: new Date().toISOString(),

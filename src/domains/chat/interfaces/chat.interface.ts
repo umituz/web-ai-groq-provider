@@ -9,8 +9,9 @@ import type {
   SendMessageInput,
   SendMessageResult,
   ChatConfig,
+  IChatStorage,
 } from "../entities";
-import type { GroqMessage } from "../../groq/interfaces";
+import type { GroqMessage } from "../../groq/entities";
 
 /**
  * Chat service interface
@@ -33,7 +34,7 @@ export interface UseChatOptions {
   /** Conversation identifier */
   readonly conversationId: string;
   /** Storage implementation */
-  readonly storage?: import("../entities").IChatStorage;
+  readonly storage?: IChatStorage;
   /** Chat configuration */
   readonly config?: ChatConfig;
   /** Auto-save messages */

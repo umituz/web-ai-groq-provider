@@ -9,25 +9,12 @@ import { GroqError } from "../utils/groq-error.util";
 import { GroqErrorType, mapHttpStatusToErrorType } from "../constants/error.constants";
 import { DEFAULT_BASE_URL, TIMEOUTS } from "../constants/groq.constants";
 
-const isDevelopment = typeof process !== "undefined" && process.env?.NODE_ENV === "development";
-
 class GroqHttpClientService implements IGroqHttpClient {
   private config: GroqConfig | null = null;
   private initialized = false;
 
   initialize(config: GroqConfig): void {
     const apiKey = config.apiKey?.trim();
-
-    if (isDevelopment) {
-      console.log("[GroqClient] Initializing:", {
-        hasApiKey: !!apiKey,
-        keyLength: apiKey?.length,
-        keyPrefix: apiKey ? `${apiKey.substring(0, 10)}...` : "",
-        baseUrl: config.baseUrl || DEFAULT_BASE_URL,
-        timeoutMs: config.timeoutMs || TIMEOUTS.DEFAULT,
-        textModel: config.textModel,
-      });
-    }
 
     if (!apiKey || apiKey.length < 10) {
       throw new GroqError(
@@ -43,13 +30,6 @@ class GroqHttpClientService implements IGroqHttpClient {
       textModel: config.textModel,
     };
     this.initialized = true;
-
-    if (isDevelopment) {
-      console.log("[GroqClient] Initialization complete:", {
-        initialized: this.initialized,
-        baseUrl: this.config.baseUrl,
-      });
-    }
   }
 
   isInitialized(): boolean {
@@ -136,16 +116,6 @@ class GroqHttpClientService implements IGroqHttpClient {
     const url = `${this.config.baseUrl}${endpoint}`;
     const timeout = this.config.timeoutMs || TIMEOUTS.DEFAULT;
 
-    if (isDevelopment) {
-      console.log("[GroqClient] API Request:", {
-        url,
-        endpoint,
-        method: "POST",
-        timeout: `${timeout}ms`,
-        hasBody: !!body,
-      });
-    }
-
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -154,7 +124,6 @@ class GroqHttpClientService implements IGroqHttpClient {
         signal.addEventListener("abort", () => controller.abort());
       }
 
-      const fetchStartTime = Date.now();
       const response = await fetch(url, {
         method: "POST",
         headers: {
@@ -165,16 +134,7 @@ class GroqHttpClientService implements IGroqHttpClient {
         signal: controller.signal,
       });
 
-      const fetchDuration = Date.now() - fetchStartTime;
       clearTimeout(timeoutId);
-
-      if (isDevelopment) {
-        console.log("[GroqClient] API Response:", {
-          status: response.status,
-          ok: response.ok,
-          fetchDuration: `${fetchDuration}ms`,
-        });
-      }
 
       if (!response.ok) {
         await this.handleErrorResponse(response);

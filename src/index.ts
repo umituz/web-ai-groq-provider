@@ -12,5 +12,5 @@
  */
 
 // Re-export domains for backward compatibility
-export * from "./domains/groq";
-export * from "./domains/chat";
+export * from "./domains/groq/index";
+export * from "./domains/chat/index";

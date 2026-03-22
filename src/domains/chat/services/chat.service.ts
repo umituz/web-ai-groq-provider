@@ -16,6 +16,7 @@ import type {
 } from "../entities";
 import { textGenerationService } from "../../groq/services";
 import { messageFormatter } from "../utils/message-formatter";
+import { DEFAULT_MODELS } from "../../groq/constants";
 
 const DEFAULT_CONFIG: ChatConfig = {
   temperature: 0.8,
@@ -92,7 +93,7 @@ class ChatService implements IChatService {
       const response = await textGenerationService.generateChatCompletion(
         groqMessages,
         {
-          model: "llama-3.3-70b-versatile",
+          model: DEFAULT_MODELS.TEXT,
           generationConfig: {
             temperature: this.config.temperature,
             maxTokens: this.config.maxTokens,
@@ -105,15 +106,13 @@ class ChatService implements IChatService {
         ...messageFormatter.toChatMessage(response, "assistant"),
         metadata: {
           companionId,
-          model: "llama-3.3-70b-versatile",
+          model: DEFAULT_MODELS.TEXT,
         },
       };
 
       return aiMessage;
     } catch (error) {
-      console.error("[ChatService] Error generating AI response:", error);
-
-      // Fallback response
+      // Fallback response on error
       return messageFormatter.toChatMessage(
         "Şimdi biraz meşgulüm, ama seni duyuyorum! 💫",
         "assistant"

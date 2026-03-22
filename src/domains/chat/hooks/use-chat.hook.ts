@@ -3,20 +3,20 @@
  * @description Main React hook for chat functionality
  */
 
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect } from "react";
 import type {
   ChatMessage,
   ChatConfig,
-  IChatStorage,
 } from "../entities";
+import type { IChatStorage } from "../entities";
 import type {
   UseChatOptions,
   UseChatReturn,
 } from "../interfaces";
 import { chatService } from "../services/chat.service";
 
-const isDevelopment =
-  typeof process !== "undefined" && process.env?.NODE_ENV === "development";
+const MESSAGE_ID_PREFIX = "msg-";
+const MESSAGE_ID_USER_SUFFIX = "user";
 
 /**
  * Hook for chat functionality with AI integration
@@ -52,10 +52,6 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       try {
         const loaded = await storage.getMessages(conversationId);
         setMessages(loaded);
-
-        if (isDevelopment) {
-          console.log("[useChat] Loaded messages:", loaded.length);
-        }
       } catch (err) {
         console.error("[useChat] Failed to load messages:", err);
       }
@@ -71,10 +67,6 @@ export function useChat(options: UseChatOptions): UseChatReturn {
 
       try {
         await storage.saveMessage(conversationId, message);
-
-        if (isDevelopment) {
-          console.log("[useChat] Message saved to storage");
-        }
       } catch (err) {
         console.error("[useChat] Failed to save message:", err);
       }
@@ -91,13 +83,9 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       setError(null);
 
       try {
-        if (isDevelopment) {
-          console.log("[useChat] Sending message:", { text, type });
-        }
-
         // Create user message first
         const userMessage: ChatMessage = {
-          id: `msg-${Date.now()}-user`,
+          id: `${MESSAGE_ID_PREFIX}${Date.now()}-${MESSAGE_ID_USER_SUFFIX}`,
           sender: "user",
           content: text,
           timestamp: new Date().toISOString(),
@@ -125,19 +113,11 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         // Save AI response to storage
         await saveToStorage(aiResponse);
         onAIResponse?.(aiResponse);
-
-        if (isDevelopment) {
-          console.log("[useChat] Message sent, AI response received");
-        }
       } catch (err) {
         const errorMessage =
           err instanceof Error ? err.message : "Failed to send message";
         setError(errorMessage);
         onError?.(errorMessage);
-
-        if (isDevelopment) {
-          console.error("[useChat] Error sending message:", err);
-        }
       } finally {
         setIsLoading(false);
         setIsTyping(false);

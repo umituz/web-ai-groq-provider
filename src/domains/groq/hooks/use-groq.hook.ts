@@ -11,8 +11,6 @@ import { GroqError } from "../utils/groq-error.util";
 import { getUserFriendlyError } from "../utils/error.util";
 import { DEFAULT_MODELS } from "../constants";
 
-const isDevelopment = typeof process !== "undefined" && process.env?.NODE_ENV === "development";
-
 export interface UseGroqOptions {
   /** Initial model to use */
   readonly model?: string;
@@ -80,12 +78,6 @@ export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
       setError(null);
       setResult(null);
 
-      if (isDevelopment) {
-        console.log("[useGroq] generate called:", {
-          promptLength: prompt.length,
-        });
-      }
-
       stableOptions.onStart?.();
 
       try {
@@ -100,12 +92,6 @@ export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
         setResult(response);
         stableOptions.onSuccess?.(response);
 
-        if (isDevelopment) {
-          console.log("[useGroq] generate success:", {
-            responseLength: response.length,
-          });
-        }
-
         return response;
       } catch (err) {
         const errorMessage = getUserFriendlyError(
@@ -113,10 +99,6 @@ export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
         );
         setError(errorMessage);
         stableOptions.onError?.(errorMessage);
-
-        if (isDevelopment) {
-          console.error("[useGroq] generate error:", { error: err });
-        }
 
         throw err;
       } finally {
@@ -135,12 +117,6 @@ export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
       setError(null);
       setResult(null);
 
-      if (isDevelopment) {
-        console.log("[useGroq] generateJSON called:", {
-          promptLength: prompt.length,
-        });
-      }
-
       stableOptions.onStart?.();
 
       try {
@@ -157,12 +133,6 @@ export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
         setResult(jsonString);
         stableOptions.onSuccess?.(jsonString);
 
-        if (isDevelopment) {
-          console.log("[useGroq] generateJSON success:", {
-            hasResponse: !!response,
-          });
-        }
-
         return response;
       } catch (err) {
         const errorMessage = getUserFriendlyError(
@@ -170,10 +140,6 @@ export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
         );
         setError(errorMessage);
         stableOptions.onError?.(errorMessage);
-
-        if (isDevelopment) {
-          console.error("[useGroq] generateJSON error:", { error: err });
-        }
 
         throw err;
       } finally {
@@ -194,12 +160,6 @@ export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
       setResult(null);
 
       let fullContent = "";
-
-      if (isDevelopment) {
-        console.log("[useGroq] stream called:", {
-          promptLength: prompt.length,
-        });
-      }
 
       stableOptions.onStart?.();
 
@@ -229,22 +189,12 @@ export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
           // Consume the async generator
           void _;
         }
-
-        if (isDevelopment) {
-          console.log("[useGroq] stream success:", {
-            contentLength: fullContent.length,
-          });
-        }
       } catch (err) {
         const errorMessage = getUserFriendlyError(
           err instanceof Error ? err : new Error("Unknown error")
         );
         setError(errorMessage);
         stableOptions.onError?.(errorMessage);
-
-        if (isDevelopment) {
-          console.error("[useGroq] stream error:", { error: err });
-        }
 
         throw err;
       } finally {

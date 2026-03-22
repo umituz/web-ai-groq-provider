@@ -16,22 +16,12 @@ import { GroqError } from "../utils/groq-error.util";
 import { GroqErrorType } from "../constants/error.constants";
 import { DEFAULT_MODELS, API_ENDPOINTS, DEFAULT_GENERATION_CONFIG } from "../constants/groq.constants";
 
-const isDevelopment = typeof process !== "undefined" && process.env?.NODE_ENV === "development";
-
 class TextGenerationService implements IGroqChatService {
   async generateCompletion(
     prompt: string,
     options: TextGenerationOptions = {}
   ): Promise<string> {
-    const startTime = Date.now();
     const model = options.model || DEFAULT_MODELS.TEXT;
-
-    if (isDevelopment) {
-      console.log("[Groq] generateCompletion called:", {
-        model,
-        promptLength: prompt.length,
-      });
-    }
 
     const messages: GroqMessage[] = [{ role: "user", content: prompt }];
     const request = this.buildRequest(model, messages, options.generationConfig);
@@ -46,13 +36,6 @@ class TextGenerationService implements IGroqChatService {
       );
     }
 
-    if (isDevelopment) {
-      console.log("[Groq] generateCompletion complete:", {
-        duration: `${Date.now() - startTime}ms`,
-        responseLength: content.length,
-      });
-    }
-
     return content;
   }
 
@@ -60,15 +43,7 @@ class TextGenerationService implements IGroqChatService {
     messages: GroqMessage[],
     options: TextGenerationOptions = {}
   ): Promise<string> {
-    const startTime = Date.now();
     const model = options.model || DEFAULT_MODELS.TEXT;
-
-    if (isDevelopment) {
-      console.log("[Groq] generateChatCompletion called:", {
-        model,
-        messageCount: messages.length,
-      });
-    }
 
     const request = this.buildRequest(model, messages, options.generationConfig);
     const response = await groqHttpClient.postChatCompletion(request);
@@ -81,13 +56,6 @@ class TextGenerationService implements IGroqChatService {
       );
     }
 
-    if (isDevelopment) {
-      console.log("[Groq] generateChatCompletion complete:", {
-        duration: `${Date.now() - startTime}ms`,
-        responseLength: content.length,
-      });
-    }
-
     return content;
   }
 
@@ -95,16 +63,7 @@ class TextGenerationService implements IGroqChatService {
     prompt: string,
     options: StructuredGenerationOptions<T> = {}
   ): Promise<T> {
-    const startTime = Date.now();
     const model = options.model || DEFAULT_MODELS.TEXT;
-
-    if (isDevelopment) {
-      console.log("[Groq] generateStructured called:", {
-        model,
-        promptLength: prompt.length,
-        hasSchema: !!options.schema,
-      });
-    }
 
     // Build JSON prompt
     const jsonPrompt = this.buildStructuredPrompt(prompt, options.schema);
@@ -131,12 +90,6 @@ class TextGenerationService implements IGroqChatService {
       const jsonStr = jsonMatch ? jsonMatch[1] || jsonMatch[0] : content;
       const parsed = JSON.parse(jsonStr) as T;
 
-      if (isDevelopment) {
-        console.log("[Groq] generateStructured complete:", {
-          duration: `${Date.now() - startTime}ms`,
-        });
-      }
-
       return parsed;
     } catch (error) {
       throw new GroqError(
@@ -152,14 +105,9 @@ class TextGenerationService implements IGroqChatService {
     callbacks: StreamingCallbacks,
     options: TextGenerationOptions = {}
   ): AsyncGenerator<void, void, unknown> {
-    const startTime = Date.now();
     const model = options.model || DEFAULT_MODELS.TEXT;
     const messages: GroqMessage[] = [{ role: "user", content: prompt }];
     const request = this.buildRequest(model, messages, options.generationConfig);
-
-    if (isDevelopment) {
-      console.log("[Groq] streamCompletion called:", { model });
-    }
 
     try {
       const response = await groqHttpClient.postChatCompletion({
@@ -174,12 +122,6 @@ class TextGenerationService implements IGroqChatService {
     } catch (error) {
       callbacks.onError?.(error as Error);
       throw error;
-    }
-
-    if (isDevelopment) {
-      console.log("[Groq] streamCompletion complete:", {
-        duration: `${Date.now() - startTime}ms`,
-      });
     }
   }
 
