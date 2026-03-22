@@ -4,13 +4,12 @@
  */
 
 import { useState, useCallback, useMemo } from "react";
-import type { GroqGenerationConfig } from "../../domain/interfaces";
-import type { TextGenerationOptions, StreamingCallbacks } from "../../domain/interfaces";
-import { textGenerationService } from "../../infrastructure/services/text-generation.service";
-import { groqHttpClient } from "../../infrastructure/services/http-client.service";
-import { GroqError } from "../../infrastructure/utils/groq-error.util";
-import { getUserFriendlyError } from "../../infrastructure/utils/error.util";
-import { DEFAULT_MODELS } from "../../infrastructure/constants/groq.constants";
+import type { GroqGenerationConfig } from "../interfaces";
+import type { TextGenerationOptions, StreamingCallbacks } from "../interfaces";
+import { textGenerationService, groqHttpClient } from "@umituz/web-ai-groq-provider/groq";
+import { GroqError } from "../utils/groq-error.util";
+import { getUserFriendlyError } from "../utils/error.util";
+import { DEFAULT_MODELS } from "../constants";
 
 const isDevelopment = typeof process !== "undefined" && process.env?.NODE_ENV === "development";
 
