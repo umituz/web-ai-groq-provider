@@ -95,15 +95,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
           console.log("[useChat] Sending message:", { text, type });
         }
 
-        // Generate AI response
-        setIsTyping(true);
-        const aiResponse = await chatService.generateAIResponse(
-          conversationId,
-          text,
-          messages
-        );
-
-        // Create user message
+        // Create user message first
         const userMessage: ChatMessage = {
           id: `msg-${Date.now()}-user`,
           sender: "user",
@@ -112,16 +104,26 @@ export function useChat(options: UseChatOptions): UseChatReturn {
           type: type || "text",
         };
 
-        // Update messages
-        const newMessages = [...messages, userMessage, aiResponse];
+        // Add user message immediately
+        const messagesWithUser = [...messages, userMessage];
+        setMessages(messagesWithUser);
+        await saveToStorage(userMessage);
+        onMessageSent?.(userMessage);
+
+        // Generate AI response
+        setIsTyping(true);
+        const aiResponse = await chatService.generateAIResponse(
+          conversationId,
+          text,
+          messages
+        );
+
+        // Update messages with AI response
+        const newMessages = [...messagesWithUser, aiResponse];
         setMessages(newMessages);
 
-        // Save to storage
-        await saveToStorage(userMessage);
+        // Save AI response to storage
         await saveToStorage(aiResponse);
-
-        // Callbacks
-        onMessageSent?.(userMessage);
         onAIResponse?.(aiResponse);
 
         if (isDevelopment) {

@@ -14,7 +14,7 @@ import type {
   SendMessageResult,
   ChatConfig,
 } from "../../entities";
-import { textGenerationService } from "../../../groq/services/text-generation.service";
+import { textGenerationService } from "@umituz/web-ai-groq-provider/groq";
 import { messageFormatter } from "../utils/message-formatter";
 
 const DEFAULT_CONFIG: ChatConfig = {
