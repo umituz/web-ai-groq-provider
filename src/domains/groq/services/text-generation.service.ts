@@ -110,15 +110,40 @@ class TextGenerationService implements IGroqChatService {
     const request = this.buildRequest(model, messages, options.generationConfig);
 
     try {
-      const response = await groqHttpClient.postChatCompletion({
-        ...request,
-        stream: true,
-      });
+      const stream = await groqHttpClient.streamChatCompletion(request);
+      const reader = stream.getReader();
+      const decoder = new TextDecoder();
+      let fullContent = "";
 
-      // Note: The actual streaming implementation would need to be handled
-      // by the streamChatCompletion method returning a ReadableStream
-      // This is a simplified version
-      callbacks.onComplete?.(response.choices[0]?.message?.content || "");
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split("\n").filter(line => line.trim() !== "");
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const data = line.slice(6);
+            if (data === "[DONE]") continue;
+
+            try {
+              const parsed = JSON.parse(data) as {
+                choices?: Array<{ delta?: { content?: string } }>;
+              };
+              const content = parsed.choices?.[0]?.delta?.content;
+              if (content) {
+                fullContent += content;
+                callbacks.onChunk?.(content);
+              }
+            } catch {
+              // Skip invalid JSON chunks
+            }
+          }
+        }
+      }
+
+      callbacks.onComplete?.(fullContent);
     } catch (error) {
       callbacks.onError?.(error as Error);
       throw error;

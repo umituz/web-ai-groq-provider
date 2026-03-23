@@ -31,23 +31,9 @@ export function getUserFriendlyError(error: Error): string {
   return error.message || "An unexpected error occurred. Please try again.";
 }
 
-/**
- * Check if error is retryable
- */
-export function isRetryableError(errorType: GroqErrorType): boolean {
-  return [
-    GroqErrorType.NETWORK_ERROR,
-    GroqErrorType.RATE_LIMIT_ERROR,
-    GroqErrorType.SERVER_ERROR,
-  ].includes(errorType);
-}
-
-/**
- * Check if error is auth-related
- */
-export function isAuthError(errorType: GroqErrorType): boolean {
-  return errorType === GroqErrorType.INVALID_API_KEY;
-}
+// isRetryableError and isAuthError are exported from ../constants/error.constants.ts
+// Re-export them here for backward compatibility
+export { isRetryableError, isAuthError } from "../constants/error.constants";
 
 /**
  * Format error for logging

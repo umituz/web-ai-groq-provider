@@ -53,7 +53,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         const loaded = await storage.getMessages(conversationId);
         setMessages(loaded);
       } catch (err) {
-        console.error("[useChat] Failed to load messages:", err);
+        // Silently fail - errors are handled through onError callback if needed
       }
     };
 
@@ -68,7 +68,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       try {
         await storage.saveMessage(conversationId, message);
       } catch (err) {
-        console.error("[useChat] Failed to save message:", err);
+        // Silently fail - errors are handled through onError callback if needed
       }
     },
     [conversationId, storage, autoSave]

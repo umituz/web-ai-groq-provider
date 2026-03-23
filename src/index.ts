@@ -5,12 +5,11 @@
  * @author umituz
  * @license MIT
  *
- * IMPORTANT: Apps should NOT use this root barrel import.
- * Use subpath imports instead:
+ * For better tree-shaking, use subpath imports:
  * - @umituz/web-ai-groq-provider/groq - Groq API client
  * - @umituz/web-ai-groq-provider/chat - Chat functionality
  */
 
-// Re-export domains for backward compatibility
+// Re-export all domains
 export * from "./domains/groq/index";
 export * from "./domains/chat/index";
