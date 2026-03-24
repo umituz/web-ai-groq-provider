@@ -8,7 +8,6 @@ import type { ChatMessage } from "../entities";
 import type { GroqMessage } from "../../groq/entities";
 
 const MESSAGE_ID_PREFIX = "msg-";
-const MESSAGE_ID_USER_SUFFIX = "user";
 
 class MessageFormatter implements IMessageFormatter {
   toGroqMessages(messages: ChatMessage[], systemPrompt?: string): GroqMessage[] {

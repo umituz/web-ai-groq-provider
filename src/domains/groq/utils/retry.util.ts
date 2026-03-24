@@ -4,7 +4,7 @@
  */
 
 import { GroqError } from "./groq-error.util";
-import { GroqErrorType, isRetryableError } from "../constants/error.constants";
+import { isRetryableError } from "../constants/error.constants";
 
 interface RetryOptions {
   /** Maximum number of retry attempts */
@@ -53,7 +53,7 @@ class RetryManager {
   ): Promise<T> {
     const maxAttempts = options.maxAttempts ?? this.defaultMaxAttempts;
     let lastError: Error | null = null;
-    let totalDelay = 0;
+    let _totalDelay = 0;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
@@ -69,7 +69,7 @@ class RetryManager {
 
         // Calculate delay for next attempt
         const delay = this.calculateDelay(attempt, options);
-        totalDelay += delay;
+        _totalDelay += delay;
 
         // Wait before retrying
         await this.delay(delay);

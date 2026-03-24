@@ -6,9 +6,7 @@
 import type {
   GroqMessage,
   GroqChatResponse,
-  GroqChatChunk,
   GroqChatRequest,
-  GroqConfig,
   GroqGenerationConfig,
 } from "../entities";
 
@@ -37,7 +35,7 @@ export interface StreamingCallbacks {
 /**
  * Structured text generation options
  */
-export interface StructuredGenerationOptions<T = unknown> {
+export interface StructuredGenerationOptions {
   /** Model to use */
   readonly model?: string;
   /** Generation configuration */
@@ -55,13 +53,13 @@ export interface IGroqChatService {
   /** Generate completion from messages */
   generateChatCompletion(messages: GroqMessage[], options?: TextGenerationOptions): Promise<string>;
   /** Generate structured JSON output */
-  generateStructured<T>(prompt: string, options?: StructuredGenerationOptions<T>): Promise<T>;
+  generateStructured<T>(prompt: string, options?: StructuredGenerationOptions): Promise<T>;
   /** Stream completion */
   streamCompletion(
     prompt: string,
     callbacks: StreamingCallbacks,
     options?: TextGenerationOptions
-  ): AsyncGenerator<void, void, unknown>;
+  ): Promise<void>;
 }
 
 /**

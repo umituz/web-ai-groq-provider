@@ -5,11 +5,9 @@
 
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import type { GroqGenerationConfig } from "../interfaces";
-import type { TextGenerationOptions, StreamingCallbacks } from "../interfaces";
+import type { StreamingCallbacks } from "../interfaces";
 import { textGenerationService } from "../services";
-import { GroqError } from "../utils/groq-error.util";
 import { getUserFriendlyError } from "../utils/error.util";
-import { DEFAULT_MODELS } from "../constants";
 import { groqHttpClient } from "../services/http-client.service";
 
 export interface UseGroqOptions {
@@ -185,7 +183,7 @@ export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
           },
         };
 
-        for await (const _ of textGenerationService.streamCompletion(
+        await textGenerationService.streamCompletion(
           prompt,
           callbacks,
           {
@@ -195,10 +193,7 @@ export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
               ...config,
             },
           }
-        )) {
-          // Consume the async generator
-          void _;
-        }
+        );
       } catch (err) {
         const errorMessage = getUserFriendlyError(
           err instanceof Error ? err : new Error("Unknown error")

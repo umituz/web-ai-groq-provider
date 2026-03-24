@@ -8,7 +8,6 @@ import type {
   ChatMessage,
   ChatConfig,
 } from "../entities";
-import type { IChatStorage } from "../entities";
 import type {
   UseChatOptions,
   UseChatReturn,
@@ -16,7 +15,6 @@ import type {
 import { chatService } from "../services/chat.service";
 
 const MESSAGE_ID_PREFIX = "msg-";
-const MESSAGE_ID_USER_SUFFIX = "user";
 
 /**
  * Hook for chat functionality with AI integration and performance optimizations
@@ -27,9 +25,9 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     storage,
     config,
     autoSave = true,
-    onMessageSent,
-    onAIResponse,
-    onError,
+    onMessageSent: _onMessageSent,
+    onAIResponse: _onAIResponse,
+    onError: _onError,
   } = options;
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -64,7 +62,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       try {
         const loaded = await storage.getMessages(conversationId);
         setMessages(loaded);
-      } catch (err) {
+      } catch (_err) {
         // Silently fail - errors are handled through onError callback if needed
       }
     };
@@ -79,29 +77,29 @@ export function useChat(options: UseChatOptions): UseChatReturn {
 
       try {
         await storage.saveMessage(conversationId, message);
-      } catch (err) {
+      } catch (_err) {
         // Silently fail - errors are handled through onError callback if needed
       }
     },
     [conversationId, storage, autoSave]
   );
 
-  // Batch save messages to storage
-  const saveMessagesToStorage = useCallback(
+  // Batch save messages to storage (reserved for future use)
+  const _saveMessagesToStorage = useCallback(
     async (messagesToSave: ChatMessage[]) => {
       if (!autoSave || !storage || messagesToSave.length === 0) return;
 
       try {
         // Try batch save if supported
         if ('saveMessages' in storage) {
-          await (storage as any).saveMessages(conversationId, messagesToSave);
+          await (storage as unknown as { saveMessages: (id: string, msgs: ChatMessage[]) => Promise<void> }).saveMessages(conversationId, messagesToSave);
         } else {
           // Fallback to individual saves in parallel
           await Promise.all(
             messagesToSave.map(msg => storage.saveMessage(conversationId, msg))
           );
         }
-      } catch (err) {
+      } catch (_err) {
         // Silently fail
       }
     },
@@ -128,7 +126,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       try {
         // Create user message
         const userMessage: ChatMessage = {
-          id: `${MESSAGE_ID_PREFIX}${Date.now()}-${MESSAGE_ID_USER_SUFFIX}`,
+          id: `${MESSAGE_ID_PREFIX}${Date.now()}-user`,
           sender: "user",
           content: text,
           timestamp: new Date().toISOString(),

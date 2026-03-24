@@ -5,7 +5,6 @@
 
 import type {
   IChatService,
-  IMessageFormatter,
 } from "../interfaces";
 import type {
   ChatMessage,
@@ -30,7 +29,6 @@ class ChatService implements IChatService {
   private config: ChatConfig = DEFAULT_CONFIG;
   private systemPromptCache = new Map<string, string>();
   private readonly PROMPT_CACHE_KEY_PREFIX = "system-prompt";
-  private readonly RESPONSE_CACHE_TTL = 300000; // 5 minutes
 
   initialize(config: ChatConfig): void {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -65,7 +63,7 @@ class ChatService implements IChatService {
     };
   }
 
-  async getConversation(conversationId: string): Promise<ChatConversation | null> {
+  async getConversation(_conversationId: string): Promise<ChatConversation | null> {
     // This would fetch from storage
     // For now, return null - storage is handled by application
     return null;
@@ -137,7 +135,7 @@ class ChatService implements IChatService {
       };
 
       return aiMessage;
-    } catch (error) {
+    } catch (_error) {
       // Fallback response on error
       return messageFormatter.toChatMessage(
         "Şimdi biraz meşgulüm, ama seni duyuyorum! 💫",

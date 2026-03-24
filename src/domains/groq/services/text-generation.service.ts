@@ -14,7 +14,7 @@ import type {
 import { groqHttpClient } from "./http-client.service";
 import { GroqError } from "../utils/groq-error.util";
 import { GroqErrorType } from "../constants/error.constants";
-import { DEFAULT_MODELS, API_ENDPOINTS, DEFAULT_GENERATION_CONFIG } from "../constants/groq.constants";
+import { DEFAULT_MODELS, DEFAULT_GENERATION_CONFIG } from "../constants/groq.constants";
 import { cacheManager } from "../utils/cache-manager.util";
 
 class TextGenerationService implements IGroqChatService {
@@ -95,7 +95,7 @@ class TextGenerationService implements IGroqChatService {
 
   async generateStructured<T>(
     prompt: string,
-    options: StructuredGenerationOptions<T> = {}
+    options: StructuredGenerationOptions = {}
   ): Promise<T> {
     const model = options.model || DEFAULT_MODELS.TEXT;
 
@@ -134,11 +134,11 @@ class TextGenerationService implements IGroqChatService {
     }
   }
 
-  async *streamCompletion(
+  async streamCompletion(
     prompt: string,
     callbacks: StreamingCallbacks,
     options: TextGenerationOptions = {}
-  ): AsyncGenerator<void, void, unknown> {
+  ): Promise<void> {
     const model = options.model || DEFAULT_MODELS.TEXT;
     const messages: GroqMessage[] = [{ role: "user", content: prompt }];
     const request = this.buildRequest(model, messages, options.generationConfig);

@@ -3,8 +3,7 @@
  * @description Helper functions for error handling
  */
 
-import type { GroqMessage } from "../entities";
-import { GroqErrorType } from "../constants/error.constants";
+// Error utilities - moved to error constants for better organization
 
 /**
  * Get user-friendly error message
