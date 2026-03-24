@@ -1,6 +1,6 @@
 /**
  * Chat Service
- * @description Core chat logic with AI integration
+ * @description Core chat logic with AI integration and performance optimizations
  */
 
 import type {
@@ -17,6 +17,7 @@ import type {
 import { textGenerationService } from "../../groq/services";
 import { messageFormatter } from "../utils/message-formatter";
 import { DEFAULT_MODELS } from "../../groq/constants";
+import { cacheManager } from "../../groq/utils/cache-manager.util";
 
 const DEFAULT_CONFIG: ChatConfig = {
   temperature: 0.8,
@@ -27,13 +28,20 @@ const DEFAULT_CONFIG: ChatConfig = {
 
 class ChatService implements IChatService {
   private config: ChatConfig = DEFAULT_CONFIG;
+  private systemPromptCache = new Map<string, string>();
+  private readonly PROMPT_CACHE_KEY_PREFIX = "system-prompt";
+  private readonly RESPONSE_CACHE_TTL = 300000; // 5 minutes
 
   initialize(config: ChatConfig): void {
     this.config = { ...DEFAULT_CONFIG, ...config };
+    // Clear system prompt cache when config changes
+    this.clearSystemPromptCache();
   }
 
   updateConfig(config: Partial<ChatConfig>): void {
     this.config = { ...this.config, ...config };
+    // Clear system prompt cache when config changes
+    this.clearSystemPromptCache();
   }
 
   async sendMessage(input: SendMessageInput): Promise<SendMessageResult> {
@@ -74,7 +82,7 @@ class ChatService implements IChatService {
     context: ChatMessage[] = []
   ): Promise<ChatMessage> {
     try {
-      // Build system prompt from config
+      // Build system prompt from config (with caching)
       const systemPrompt = this.buildSystemPrompt();
 
       // Format messages for Groq
@@ -89,17 +97,34 @@ class ChatService implements IChatService {
         content: userMessage,
       });
 
-      // Generate response
-      const response = await textGenerationService.generateChatCompletion(
-        groqMessages,
-        {
-          model: DEFAULT_MODELS.TEXT,
-          generationConfig: {
-            temperature: this.config.temperature,
-            maxTokens: this.config.maxTokens,
-          },
-        }
-      );
+      // Check cache for response
+      const cacheKey = cacheManager.generateKey({
+        companionId,
+        userMessage,
+        context: context.map(m => ({ sender: m.sender, content: m.content })),
+        config: {
+          temperature: this.config.temperature,
+          maxTokens: this.config.maxTokens,
+        },
+      });
+
+      const cachedResponse = cacheManager.get<string>(cacheKey);
+      const response = cachedResponse ||
+        await textGenerationService.generateChatCompletion(
+          groqMessages,
+          {
+            model: DEFAULT_MODELS.TEXT,
+            generationConfig: {
+              temperature: this.config.temperature,
+              maxTokens: this.config.maxTokens,
+            },
+          }
+        );
+
+      // Cache the response if it wasn't cached
+      if (!cachedResponse) {
+        cacheManager.set(cacheKey, response);
+      }
 
       // Format response as chat message
       const aiMessage: ChatMessage = {
@@ -107,6 +132,7 @@ class ChatService implements IChatService {
         metadata: {
           companionId,
           model: DEFAULT_MODELS.TEXT,
+          cached: !!cachedResponse,
         },
       };
 
@@ -122,9 +148,36 @@ class ChatService implements IChatService {
 
   private buildSystemPrompt(): string {
     const language = this.config.language || "tr";
-    const basePrompt = this.config.systemPrompt || this.getDefaultPrompt(language);
+    const customPrompt = this.config.systemPrompt;
+
+    // Generate cache key
+    const cacheKey = `${this.PROMPT_CACHE_KEY_PREFIX}-${language}-${customPrompt?.length || 0}`;
+
+    // Check cache
+    if (this.systemPromptCache.has(cacheKey)) {
+      return this.systemPromptCache.get(cacheKey)!;
+    }
+
+    // Build prompt
+    const basePrompt = customPrompt || this.getDefaultPrompt(language);
+
+    // Cache it
+    this.systemPromptCache.set(cacheKey, basePrompt);
 
     return basePrompt;
+  }
+
+  private clearSystemPromptCache(): void {
+    this.systemPromptCache.clear();
+  }
+
+  /**
+   * Clear all cached data (system prompts and response cache)
+   */
+  clearCache(): void {
+    this.clearSystemPromptCache();
+    // Note: Response cache is managed by textGenerationService
+    // Export cache clearing function from there if needed
   }
 
   private getDefaultPrompt(language: string): string {

@@ -1,17 +1,21 @@
 /**
  * Groq HTTP Client Service
- * @description Handles all HTTP communication with Groq API
+ * @description Handles all HTTP communication with Groq API with performance optimizations
  */
 
 import type { IGroqHttpClient } from "../interfaces";
 import type { GroqConfig, GroqChatRequest, GroqChatResponse, GroqChatChunk } from "../entities";
 import { GroqError } from "../utils/groq-error.util";
-import { GroqErrorType, mapHttpStatusToErrorType } from "../constants/error.constants";
+import { GroqErrorType, mapHttpStatusToErrorType, isRetryableError } from "../constants/error.constants";
 import { DEFAULT_BASE_URL, TIMEOUTS } from "../constants/groq.constants";
+import { requestDeduplicator } from "../utils/request-deduplicator.util";
+import { requestQueue } from "../utils/request-queue.util";
+import { retryManager } from "../utils/retry.util";
 
 class GroqHttpClientService implements IGroqHttpClient {
   private config: GroqConfig | null = null;
   private initialized = false;
+  private pendingAbortControllers = new Set<AbortController>();
 
   initialize(config: GroqConfig): void {
     const apiKey = config.apiKey?.trim();
@@ -30,6 +34,18 @@ class GroqHttpClientService implements IGroqHttpClient {
       textModel: config.textModel,
     };
     this.initialized = true;
+  }
+
+  /**
+   * Cancel all pending requests
+   */
+  cancelPendingRequests(): void {
+    for (const controller of this.pendingAbortControllers) {
+      controller.abort();
+    }
+    this.pendingAbortControllers.clear();
+    requestQueue.cancelAll();
+    requestDeduplicator.cancelAll();
   }
 
   isInitialized(): boolean {
@@ -57,10 +73,21 @@ class GroqHttpClientService implements IGroqHttpClient {
   }
 
   async postChatCompletion(request: GroqChatRequest): Promise<GroqChatResponse> {
-    return this.request<GroqChatResponse>("/chat/completions", {
+    // Generate deduplication key
+    const dedupeKey = requestDeduplicator.generateKey({
+      endpoint: "/chat/completions",
       ...request,
-      stream: false,
     });
+
+    // Execute with deduplication, retry, and queue management
+    return requestDeduplicator.execute(dedupeKey, () =>
+      retryManager.execute(() =>
+        requestQueue.add(
+          () => this.request<GroqChatResponse>("/chat/completions", { ...request, stream: false }),
+          10 // High priority for user-initiated requests
+        )
+      )
+    );
   }
 
   async streamChatCompletion(request: GroqChatRequest): Promise<ReadableStream> {
@@ -72,33 +99,54 @@ class GroqHttpClientService implements IGroqHttpClient {
     }
 
     const url = `${this.config.baseUrl}/chat/completions`;
+    const timeout = this.config.timeoutMs || TIMEOUTS.STREAMING;
 
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.config.apiKey}`,
-      },
-      body: JSON.stringify({ ...request, stream: true }),
-    });
+    let controller: AbortController | null = null;
+    let timeoutId: NodeJS.Timeout | null = null;
 
-    if (!response.ok) {
-      throw new GroqError(
-        mapHttpStatusToErrorType(response.status),
-        `HTTP ${response.status}: ${response.statusText}`,
-        undefined,
-        { status: response.status, url: response.url }
-      );
+    try {
+      controller = new AbortController();
+      timeoutId = setTimeout(() => controller?.abort(), timeout);
+
+      this.pendingAbortControllers.add(controller);
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.config.apiKey}`,
+        },
+        body: JSON.stringify({ ...request, stream: true }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new GroqError(
+          mapHttpStatusToErrorType(response.status),
+          `HTTP ${response.status}: ${response.statusText}`,
+          undefined,
+          { status: response.status, url: response.url }
+        );
+      }
+
+      if (!response.body) {
+        throw new GroqError(
+          GroqErrorType.NETWORK_ERROR,
+          "Response body is null"
+        );
+      }
+
+      return response.body;
+    } catch (error) {
+      throw this.handleRequestError(error);
+    } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      if (controller) {
+        this.pendingAbortControllers.delete(controller);
+      }
     }
-
-    if (!response.body) {
-      throw new GroqError(
-        GroqErrorType.NETWORK_ERROR,
-        "Response body is null"
-      );
-    }
-
-    return response.body;
   }
 
   private async request<T>(
@@ -116,13 +164,18 @@ class GroqHttpClientService implements IGroqHttpClient {
     const url = `${this.config.baseUrl}${endpoint}`;
     const timeout = this.config.timeoutMs || TIMEOUTS.DEFAULT;
 
+    let controller: AbortController | null = null;
+    let timeoutId: NodeJS.Timeout | null = null;
+
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeout);
+      controller = new AbortController();
+      timeoutId = setTimeout(() => controller?.abort(), timeout);
 
       if (signal) {
-        signal.addEventListener("abort", () => controller.abort());
+        signal.addEventListener("abort", () => controller?.abort());
       }
+
+      this.pendingAbortControllers.add(controller);
 
       const response = await fetch(url, {
         method: "POST",
@@ -134,8 +187,6 @@ class GroqHttpClientService implements IGroqHttpClient {
         signal: controller.signal,
       });
 
-      clearTimeout(timeoutId);
-
       if (!response.ok) {
         await this.handleErrorResponse(response);
       }
@@ -143,6 +194,13 @@ class GroqHttpClientService implements IGroqHttpClient {
       return (await response.json()) as T;
     } catch (error) {
       throw this.handleRequestError(error);
+    } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      if (controller) {
+        this.pendingAbortControllers.delete(controller);
+      }
     }
   }
 
@@ -198,6 +256,7 @@ class GroqHttpClientService implements IGroqHttpClient {
   }
 
   reset(): void {
+    this.cancelPendingRequests();
     this.config = null;
     this.initialized = false;
   }

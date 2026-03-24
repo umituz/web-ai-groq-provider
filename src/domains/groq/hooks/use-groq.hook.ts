@@ -1,15 +1,16 @@
 /**
  * useGroq Hook
- * @description Main React hook for Groq text generation
+ * @description Main React hook for Groq text generation with performance optimizations
  */
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import type { GroqGenerationConfig } from "../interfaces";
 import type { TextGenerationOptions, StreamingCallbacks } from "../interfaces";
 import { textGenerationService } from "../services";
 import { GroqError } from "../utils/groq-error.util";
 import { getUserFriendlyError } from "../utils/error.util";
 import { DEFAULT_MODELS } from "../constants";
+import { groqHttpClient } from "../services/http-client.service";
 
 export interface UseGroqOptions {
   /** Initial model to use */
@@ -51,26 +52,32 @@ export interface UseGroqReturn {
 }
 
 /**
- * Hook for Groq text generation
+ * Hook for Groq text generation with performance optimizations
  */
 export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
 
-  // Memoize options to prevent unnecessary callback recreations
-  const stableOptions = useMemo(
-    () => options,
-    [
-      options.model,
-      options.generationConfig?.temperature,
-      options.generationConfig?.maxTokens,
-      options.generationConfig?.topP,
-      options.onStart,
-      options.onSuccess,
-      options.onError,
-    ]
+  // Use ref for callbacks to avoid stale closures and unstable references
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
+
+  // Memoize only the stable configuration values (not callbacks)
+  const stableConfig = useMemo(
+    () => ({
+      model: options.model,
+      generationConfig: options.generationConfig,
+    }),
+    [options.model, options.generationConfig?.temperature, options.generationConfig?.maxTokens, options.generationConfig?.topP]
   );
+
+  // Cleanup pending requests on unmount
+  useEffect(() => {
+    return () => {
+      groqHttpClient.cancelPendingRequests();
+    };
+  }, []);
 
   const generate = useCallback(
     async (prompt: string, config?: GroqGenerationConfig): Promise<string> => {
@@ -78,19 +85,21 @@ export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
       setError(null);
       setResult(null);
 
-      stableOptions.onStart?.();
+      // Use ref to get latest callbacks without adding to dependencies
+      const currentOptions = optionsRef.current;
+      currentOptions.onStart?.();
 
       try {
         const response = await textGenerationService.generateCompletion(prompt, {
-          model: stableOptions.model,
+          model: stableConfig.model,
           generationConfig: {
-            ...stableOptions.generationConfig,
+            ...stableConfig.generationConfig,
             ...config,
           },
         });
 
         setResult(response);
-        stableOptions.onSuccess?.(response);
+        currentOptions.onSuccess?.(response);
 
         return response;
       } catch (err) {
@@ -98,14 +107,14 @@ export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
           err instanceof Error ? err : new Error("Unknown error")
         );
         setError(errorMessage);
-        stableOptions.onError?.(errorMessage);
+        currentOptions.onError?.(errorMessage);
 
         throw err;
       } finally {
         setIsLoading(false);
       }
     },
-    [stableOptions]
+    [stableConfig]
   );
 
   const generateJSON = useCallback(
@@ -117,13 +126,14 @@ export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
       setError(null);
       setResult(null);
 
-      stableOptions.onStart?.();
+      const currentOptions = optionsRef.current;
+      currentOptions.onStart?.();
 
       try {
         const response = await textGenerationService.generateStructured<T>(prompt, {
-          model: stableOptions.model,
+          model: stableConfig.model,
           generationConfig: {
-            ...stableOptions.generationConfig,
+            ...stableConfig.generationConfig,
             ...config,
           },
           schema: config?.schema,
@@ -131,7 +141,7 @@ export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
 
         const jsonString = JSON.stringify(response, null, 2);
         setResult(jsonString);
-        stableOptions.onSuccess?.(jsonString);
+        currentOptions.onSuccess?.(jsonString);
 
         return response;
       } catch (err) {
@@ -139,14 +149,14 @@ export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
           err instanceof Error ? err : new Error("Unknown error")
         );
         setError(errorMessage);
-        stableOptions.onError?.(errorMessage);
+        currentOptions.onError?.(errorMessage);
 
         throw err;
       } finally {
         setIsLoading(false);
       }
     },
-    [stableOptions]
+    [stableConfig]
   );
 
   const stream = useCallback(
@@ -159,19 +169,19 @@ export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
       setError(null);
       setResult(null);
 
-      let fullContent = "";
-
-      stableOptions.onStart?.();
+      const contentChunks: string[] = [];
+      const currentOptions = optionsRef.current;
+      currentOptions.onStart?.();
 
       try {
         const callbacks: StreamingCallbacks = {
           onChunk: (c) => {
-            fullContent += c;
+            contentChunks.push(c); // Use array accumulation
             onChunk(c);
           },
           onComplete: (text) => {
             setResult(text);
-            stableOptions.onSuccess?.(text);
+            currentOptions.onSuccess?.(text);
           },
         };
 
@@ -179,9 +189,9 @@ export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
           prompt,
           callbacks,
           {
-            model: stableOptions.model,
+            model: stableConfig.model,
             generationConfig: {
-              ...stableOptions.generationConfig,
+              ...stableConfig.generationConfig,
               ...config,
             },
           }
@@ -194,14 +204,14 @@ export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
           err instanceof Error ? err : new Error("Unknown error")
         );
         setError(errorMessage);
-        stableOptions.onError?.(errorMessage);
+        currentOptions.onError?.(errorMessage);
 
         throw err;
       } finally {
         setIsLoading(false);
       }
     },
-    [stableOptions]
+    [stableConfig]
   );
 
   const reset = useCallback(() => {

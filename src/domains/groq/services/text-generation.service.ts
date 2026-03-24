@@ -1,6 +1,6 @@
 /**
  * Text Generation Service
- * @description Handles text generation using Groq API
+ * @description Handles text generation using Groq API with caching and performance optimizations
  */
 
 import type { IGroqChatService } from "../interfaces";
@@ -15,13 +15,28 @@ import { groqHttpClient } from "./http-client.service";
 import { GroqError } from "../utils/groq-error.util";
 import { GroqErrorType } from "../constants/error.constants";
 import { DEFAULT_MODELS, API_ENDPOINTS, DEFAULT_GENERATION_CONFIG } from "../constants/groq.constants";
+import { cacheManager } from "../utils/cache-manager.util";
 
 class TextGenerationService implements IGroqChatService {
+  private readonly CACHE_TTL = 300000; // 5 minutes
   async generateCompletion(
     prompt: string,
     options: TextGenerationOptions = {}
   ): Promise<string> {
     const model = options.model || DEFAULT_MODELS.TEXT;
+
+    // Check cache first
+    const cacheKey = cacheManager.generateKey({
+      type: "completion",
+      model,
+      prompt,
+      config: options.generationConfig,
+    });
+
+    const cached = cacheManager.get<string>(cacheKey);
+    if (cached !== null) {
+      return cached;
+    }
 
     const messages: GroqMessage[] = [{ role: "user", content: prompt }];
     const request = this.buildRequest(model, messages, options.generationConfig);
@@ -36,6 +51,9 @@ class TextGenerationService implements IGroqChatService {
       );
     }
 
+    // Cache the result
+    cacheManager.set(cacheKey, content);
+
     return content;
   }
 
@@ -44,6 +62,19 @@ class TextGenerationService implements IGroqChatService {
     options: TextGenerationOptions = {}
   ): Promise<string> {
     const model = options.model || DEFAULT_MODELS.TEXT;
+
+    // Check cache first
+    const cacheKey = cacheManager.generateKey({
+      type: "chat",
+      model,
+      messages,
+      config: options.generationConfig,
+    });
+
+    const cached = cacheManager.get<string>(cacheKey);
+    if (cached !== null) {
+      return cached;
+    }
 
     const request = this.buildRequest(model, messages, options.generationConfig);
     const response = await groqHttpClient.postChatCompletion(request);
@@ -55,6 +86,9 @@ class TextGenerationService implements IGroqChatService {
         "No content generated from Groq API"
       );
     }
+
+    // Cache the result
+    cacheManager.set(cacheKey, content);
 
     return content;
   }
@@ -113,13 +147,13 @@ class TextGenerationService implements IGroqChatService {
       const stream = await groqHttpClient.streamChatCompletion(request);
       const reader = stream.getReader();
       const decoder = new TextDecoder();
-      let fullContent = "";
+      const contentChunks: string[] = []; // Use array instead of string concatenation
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value);
+        const chunk = decoder.decode(value, { stream: true }); // Optimize with stream option
         const lines = chunk.split("\n").filter(line => line.trim() !== "");
 
         for (const line of lines) {
@@ -133,7 +167,7 @@ class TextGenerationService implements IGroqChatService {
               };
               const content = parsed.choices?.[0]?.delta?.content;
               if (content) {
-                fullContent += content;
+                contentChunks.push(content); // Push to array instead of concatenation
                 callbacks.onChunk?.(content);
               }
             } catch {
@@ -143,6 +177,8 @@ class TextGenerationService implements IGroqChatService {
         }
       }
 
+      // Join chunks at the end - more efficient than repeated concatenation
+      const fullContent = contentChunks.join('');
       callbacks.onComplete?.(fullContent);
     } catch (error) {
       callbacks.onError?.(error as Error);
@@ -186,3 +222,17 @@ class TextGenerationService implements IGroqChatService {
 }
 
 export const textGenerationService = new TextGenerationService();
+
+/**
+ * Clear all cached responses
+ */
+export function clearGenerationCache(): void {
+  cacheManager.clear();
+}
+
+/**
+ * Get cache statistics
+ */
+export function getCacheStats() {
+  return cacheManager.getStats();
+}
