@@ -1,6 +1,5 @@
 /**
- * Domain Entities Index
- * Subpath: @umituz/web-ai-groq-provider/domain
+ * Groq Domain Entities Index
  */
 
 export type {
@@ -16,5 +15,4 @@ export type {
   GroqChunkChoice,
   GroqChatChunk,
   GroqErrorResponse,
-  GroqMessageCreateInput,
 } from "./groq.entities";

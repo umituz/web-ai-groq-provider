@@ -1,195 +1,198 @@
 /**
  * Chat Service
- * @description Core chat logic with AI integration and performance optimizations
+ * @description Core chat logic. Composes:
+ *              - text generation (from groq domain)
+ *              - message formatting
+ *              - system prompt resolution (via injected strategy)
+ *
+ *              Does NOT hardcode any language or fallback content.
+ *              Errors propagate to the caller; the consumer decides
+ *              how to render a user-friendly message.
  */
 
 import type {
   IChatService,
+  SystemPromptStrategy,
 } from "../interfaces";
 import type {
   ChatMessage,
+  ChatConfig,
   ChatConversation,
   SendMessageInput,
   SendMessageResult,
-  ChatConfig,
+  IChatStorage,
+  ChatTokenUsage,
 } from "../entities";
-import { textGenerationService } from "../../groq/services";
+import type { TextGenerationService } from "../../groq/services";
+import { DEFAULT_MODELS } from "../../groq/constants/groq.constants";
 import { messageFormatter } from "../utils/message-formatter";
-import { DEFAULT_MODELS } from "../../groq/constants";
-import { cacheManager } from "../../groq/utils/cache-manager.util";
+import { DEFAULT_PROMPT_STRATEGY } from "../utils/prompt-strategy";
+import { GroqError } from "../../groq/utils/groq-error";
+import { GroqErrorType } from "../../groq/constants/error-types";
 
 const DEFAULT_CONFIG: ChatConfig = {
   temperature: 0.8,
   maxTokens: 500,
-  includeTimestamp: true,
-  language: "tr",
 };
 
-class ChatService implements IChatService {
+export class ChatService implements IChatService {
   private config: ChatConfig = DEFAULT_CONFIG;
-  private systemPromptCache = new Map<string, string>();
-  private readonly PROMPT_CACHE_KEY_PREFIX = "system-prompt";
+  private promptStrategy: SystemPromptStrategy = DEFAULT_PROMPT_STRATEGY;
+  private storage: IChatStorage | null = null;
+
+  constructor(
+    private readonly textGeneration: TextGenerationService,
+  ) {}
 
   initialize(config: ChatConfig): void {
     this.config = { ...DEFAULT_CONFIG, ...config };
-    // Clear system prompt cache when config changes
-    this.clearSystemPromptCache();
   }
 
   updateConfig(config: Partial<ChatConfig>): void {
     this.config = { ...this.config, ...config };
-    // Clear system prompt cache when config changes
-    this.clearSystemPromptCache();
   }
 
-  async sendMessage(input: SendMessageInput): Promise<SendMessageResult> {
-    // Create user message with all properties
-    const userMessage: ChatMessage = {
-      ...messageFormatter.toChatMessage(input.text, "user"),
-      type: input.type || "text",
-      ...(input.imageUrl && { imageUrl: input.imageUrl }),
-    };
+  setPromptStrategy(strategy: SystemPromptStrategy): void {
+    this.promptStrategy = strategy;
+  }
 
-    // Generate AI response
-    const aiResponse = await this.generateAIResponse(
-      input.companionId,
-      input.text,
-      []
-    );
+  setStorage(storage: IChatStorage): void {
+    this.storage = storage;
+  }
 
+  async getConversation(conversationId: string): Promise<ChatConversation | null> {
+    const storage = this.requireStorage();
+    const messages = await storage.getMessages(conversationId);
+    if (messages.length === 0) return null;
+    const last = messages[messages.length - 1];
+    const first = messages[0];
+    const companionId = String(first.metadata?.["companionId"] ?? "unknown");
+    const companionName = String(first.metadata?.["companionName"] ?? "Unknown");
     return {
-      userMessage,
-      aiResponse,
+      id: conversationId,
+      companionId,
+      companionName,
+      lastMessage: last,
+      messageCount: messages.length,
+      updatedAt: last.timestamp,
     };
-  }
-
-  async getConversation(_conversationId: string): Promise<ChatConversation | null> {
-    // This would fetch from storage
-    // For now, return null - storage is handled by application
-    return null;
   }
 
   async getConversations(): Promise<ChatConversation[]> {
-    // This would fetch from storage
+    // Single-conversation view; multi-conversation aggregation is the
+    // responsibility of the host application's storage implementation.
+    // Returning an empty list avoids the false impression that we
+    // have a fully featured conversation registry.
     return [];
+  }
+
+  async sendMessage(input: SendMessageInput): Promise<SendMessageResult> {
+    const userMessage: ChatMessage = {
+      ...messageFormatter.toChatMessage(input.text, "user"),
+      type: input.type ?? "text",
+      ...(input.imageUrl !== undefined ? { imageUrl: input.imageUrl } : {}),
+    };
+
+    const aiResponse = await this.generateAIResponse(
+      input.companionId,
+      input.text,
+      [],
+    );
+
+    return { userMessage, aiResponse };
   }
 
   async generateAIResponse(
     companionId: string,
     userMessage: string,
-    context: ChatMessage[] = []
+    context: ReadonlyArray<ChatMessage> = [],
   ): Promise<ChatMessage> {
-    try {
-      // Build system prompt from config (with caching)
-      const systemPrompt = this.buildSystemPrompt();
+    const systemPrompt = this.promptStrategy.resolve(this.config);
+    const groqMessages = messageFormatter.toGroqMessages(context, systemPrompt);
+    groqMessages.push({ role: "user", content: userMessage });
 
-      // Format messages for Groq
-      const groqMessages = messageFormatter.toGroqMessages(
-        context,
-        systemPrompt
-      );
-
-      // Add current user message
-      groqMessages.push({
-        role: "user",
-        content: userMessage,
-      });
-
-      // Check cache for response
-      const cacheKey = cacheManager.generateKey({
-        companionId,
-        userMessage,
-        context: context.map(m => ({ sender: m.sender, content: m.content })),
-        config: {
+    const response = await this.textGeneration.generateChatCompletion(
+      groqMessages,
+      {
+        model: DEFAULT_MODELS.TEXT,
+        generationConfig: {
           temperature: this.config.temperature,
           maxTokens: this.config.maxTokens,
         },
-      });
+      },
+    );
 
-      const cachedResponse = cacheManager.get<string>(cacheKey);
-      const response = cachedResponse ||
-        await textGenerationService.generateChatCompletion(
-          groqMessages,
-          {
-            model: DEFAULT_MODELS.TEXT,
-            generationConfig: {
-              temperature: this.config.temperature,
-              maxTokens: this.config.maxTokens,
-            },
-          }
-        );
-
-      // Cache the response if it wasn't cached
-      if (!cachedResponse) {
-        cacheManager.set(cacheKey, response);
-      }
-
-      // Format response as chat message
-      const aiMessage: ChatMessage = {
-        ...messageFormatter.toChatMessage(response, "assistant"),
-        metadata: {
-          companionId,
-          model: DEFAULT_MODELS.TEXT,
-          cached: !!cachedResponse,
-        },
-      };
-
-      return aiMessage;
-    } catch (_error) {
-      // Fallback response on error
-      return messageFormatter.toChatMessage(
-        "Şimdi biraz meşgulüm, ama seni duyuyorum! 💫",
-        "assistant"
-      );
-    }
-  }
-
-  private buildSystemPrompt(): string {
-    const language = this.config.language || "tr";
-    const customPrompt = this.config.systemPrompt;
-
-    // Generate cache key
-    const cacheKey = `${this.PROMPT_CACHE_KEY_PREFIX}-${language}-${customPrompt?.length || 0}`;
-
-    // Check cache
-    if (this.systemPromptCache.has(cacheKey)) {
-      return this.systemPromptCache.get(cacheKey)!;
-    }
-
-    // Build prompt
-    const basePrompt = customPrompt || this.getDefaultPrompt(language);
-
-    // Cache it
-    this.systemPromptCache.set(cacheKey, basePrompt);
-
-    return basePrompt;
-  }
-
-  private clearSystemPromptCache(): void {
-    this.systemPromptCache.clear();
+    return {
+      ...messageFormatter.toChatMessage(response, "assistant"),
+      metadata: {
+        companionId,
+        model: DEFAULT_MODELS.TEXT,
+      },
+    };
   }
 
   /**
-   * Clear all cached data (system prompts and response cache)
+   * Generate a streaming AI response. Emits content chunks via the
+   * `onChunk` callback. Resolves once the stream completes.
+   *
+   * @param userMessage - The latest user message.
+   * @param context - The message history to send as context.
+   * @param onChunk - Called for each content chunk.
    */
-  clearCache(): void {
-    this.clearSystemPromptCache();
-    // Note: Response cache is managed by textGenerationService
-    // Export cache clearing function from there if needed
+  async generateStreamingResponse(
+    userMessage: string,
+    context: ReadonlyArray<ChatMessage>,
+    onChunk: (chunk: string) => void,
+  ): Promise<string> {
+    const systemPrompt = this.promptStrategy.resolve(this.config);
+    const groqMessages = messageFormatter.toGroqMessages(context, systemPrompt);
+    groqMessages.push({ role: "user", content: userMessage });
+
+    return this.textGeneration.streamChatCompletion(
+      groqMessages,
+      {
+        onChunk,
+      },
+      {
+        model: DEFAULT_MODELS.TEXT,
+        generationConfig: {
+          temperature: this.config.temperature,
+          maxTokens: this.config.maxTokens,
+        },
+      },
+    );
   }
 
-  private getDefaultPrompt(language: string): string {
-    if (language === "tr") {
-      return `Sen samimi, eğlenceli ve ilgi çekici bir AI companionsın. Türkçe konuşuyorsun.
-Kullanıcıyla doğal, rahat ve arkadaşça bir sohbet tarzı benimseyerek iletişim kur.
-Yavaş yazma stilini kullan ama abartma. Emoji kullanabilirsin ama çok da abartma.
-Kısa ve öz cevaplar ver.`;
+  private requireStorage(): IChatStorage {
+    if (!this.storage) {
+      throw new GroqError(
+        GroqErrorType.MISSING_CONFIG,
+        "ChatService.getConversation requires setStorage() to be called first.",
+      );
     }
-
-    return `You are a friendly, engaging AI companion. Be natural, casual, and warm.
-Keep responses concise and conversational. Use emojis sparingly.`;
+    return this.storage;
   }
 }
 
-export const chatService = new ChatService();
-export { messageFormatter };
+/**
+ * Helper to extract a `ChatTokenUsage` from a ChatMessage's metadata,
+ * if the model used reported it.
+ *
+ * @param message - The chat message to inspect.
+ * @returns The token usage, or `null` when not present.
+ */
+export function extractTokenUsage(message: ChatMessage): ChatTokenUsage | null {
+  const meta = message.metadata;
+  if (!meta) return null;
+  const usage = meta["usage"];
+  if (!usage || typeof usage !== "object") return null;
+  const u = usage as Record<string, unknown>;
+  const promptTokens = typeof u["prompt_tokens"] === "number" ? u["prompt_tokens"] : null;
+  const completionTokens =
+    typeof u["completion_tokens"] === "number" ? u["completion_tokens"] : null;
+  const totalTokens = typeof u["total_tokens"] === "number" ? u["total_tokens"] : null;
+  if (promptTokens === null || completionTokens === null || totalTokens === null) {
+    return null;
+  }
+  return { promptTokens, completionTokens, totalTokens };
+}

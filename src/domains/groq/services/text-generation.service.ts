@@ -1,238 +1,189 @@
 /**
  * Text Generation Service
- * @description Handles text generation using Groq API with caching and performance optimizations
+ * @description High-level text generation orchestrator. Coordinates:
+ *              - cache lookup/store
+ *              - request building
+ *              - HTTP transport
+ *              - response parsing (text / structured / streaming)
+ *
+ *              No longer owns prompt construction (delegated to builder)
+ *              or JSON parsing (delegated to JsonResponseParser).
  */
 
-import type { IGroqChatService } from "../interfaces";
 import type {
-  GroqMessage,
-  GroqChatRequest,
   TextGenerationOptions,
   StreamingCallbacks,
   StructuredGenerationOptions,
+  IGroqChatService,
 } from "../interfaces";
-import { groqHttpClient } from "./http-client.service";
-import { GroqError } from "../utils/groq-error.util";
-import { GroqErrorType } from "../constants/error.constants";
-import { DEFAULT_MODELS, DEFAULT_GENERATION_CONFIG } from "../constants/groq.constants";
-import { cacheManager } from "../utils/cache-manager.util";
+import type { GroqMessage } from "../entities";
+import type { IGroqHttpClient } from "../interfaces";
+import { GroqError } from "../utils/groq-error";
+import { GroqErrorType } from "../constants/error-types";
+import { DEFAULT_MODELS } from "../constants/groq.constants";
+import {
+  CACHE_KEY_TYPE_COMPLETION,
+  CACHE_KEY_TYPE_CHAT,
+} from "../constants/identifier.constants";
+import { CacheManager } from "../utils/cache-manager";
+import { GroqChatRequestBuilder, StructuredPromptBuilder } from "../builders";
+import { JsonResponseParser, StreamingResponseParser } from "../parsers";
+import { createUserMessage } from "../utils/message.util";
 
-class TextGenerationService implements IGroqChatService {
-  private readonly CACHE_TTL = 300000; // 5 minutes
-  async generateCompletion(
+const STRUCTURED_OUTPUT_TEMPERATURE = 0.1;
+
+export class TextGenerationService implements IGroqChatService {
+  private readonly jsonParser = new JsonResponseParser();
+
+  constructor(
+    private readonly httpClient: IGroqHttpClient,
+    private readonly cache: CacheManager = new CacheManager(),
+  ) {}
+
+  generateCompletion(
     prompt: string,
-    options: TextGenerationOptions = {}
+    options: TextGenerationOptions = {},
   ): Promise<string> {
-    const model = options.model || DEFAULT_MODELS.TEXT;
+    const model = options.model ?? DEFAULT_MODELS.TEXT;
 
-    // Check cache first
-    const cacheKey = cacheManager.generateKey({
-      type: "completion",
-      model,
-      prompt,
-      config: options.generationConfig,
-    });
-
-    const cached = cacheManager.get<string>(cacheKey);
-    if (cached !== null) {
-      return cached;
-    }
-
-    const messages: GroqMessage[] = [{ role: "user", content: prompt }];
-    const request = this.buildRequest(model, messages, options.generationConfig);
-
-    const response = await groqHttpClient.postChatCompletion(request);
-    const content = response.choices[0]?.message?.content;
-
-    if (!content) {
-      throw new GroqError(
-        GroqErrorType.UNKNOWN_ERROR,
-        "No content generated from Groq API"
-      );
-    }
-
-    // Cache the result
-    cacheManager.set(cacheKey, content);
-
-    return content;
+    return this.executeWithCache(
+      {
+        type: CACHE_KEY_TYPE_COMPLETION,
+        model,
+        prompt,
+        config: options.generationConfig,
+      },
+      async () => {
+        const request = GroqChatRequestBuilder.for(model)
+          .withMessages([createUserMessage(prompt)])
+          .withConfig(options.generationConfig)
+          .build();
+        const response = await this.httpClient.postChatCompletion(request);
+        return this.extractContent(response.choices[0]?.message?.content);
+      },
+    );
   }
 
-  async generateChatCompletion(
-    messages: GroqMessage[],
-    options: TextGenerationOptions = {}
+  generateChatCompletion(
+    messages: ReadonlyArray<GroqMessage>,
+    options: TextGenerationOptions = {},
   ): Promise<string> {
-    const model = options.model || DEFAULT_MODELS.TEXT;
+    const model = options.model ?? DEFAULT_MODELS.TEXT;
 
-    // Check cache first
-    const cacheKey = cacheManager.generateKey({
-      type: "chat",
-      model,
-      messages,
-      config: options.generationConfig,
-    });
-
-    const cached = cacheManager.get<string>(cacheKey);
-    if (cached !== null) {
-      return cached;
-    }
-
-    const request = this.buildRequest(model, messages, options.generationConfig);
-    const response = await groqHttpClient.postChatCompletion(request);
-    const content = response.choices[0]?.message?.content;
-
-    if (!content) {
-      throw new GroqError(
-        GroqErrorType.UNKNOWN_ERROR,
-        "No content generated from Groq API"
-      );
-    }
-
-    // Cache the result
-    cacheManager.set(cacheKey, content);
-
-    return content;
+    return this.executeWithCache(
+      {
+        type: CACHE_KEY_TYPE_CHAT,
+        model,
+        messages: [...messages],
+        config: options.generationConfig,
+      },
+      async () => {
+        const request = GroqChatRequestBuilder.for(model)
+          .withMessages(messages)
+          .withConfig(options.generationConfig)
+          .build();
+        const response = await this.httpClient.postChatCompletion(request);
+        return this.extractContent(response.choices[0]?.message?.content);
+      },
+    );
   }
 
-  async generateStructured<T>(
+  generateStructured<T>(
     prompt: string,
-    options: StructuredGenerationOptions = {}
+    options: StructuredGenerationOptions = {},
   ): Promise<T> {
-    const model = options.model || DEFAULT_MODELS.TEXT;
+    const model = options.model ?? DEFAULT_MODELS.TEXT;
+    const jsonPrompt = StructuredPromptBuilder.for(prompt)
+      .withSchema(options.schema)
+      .build();
 
-    // Build JSON prompt
-    const jsonPrompt = this.buildStructuredPrompt(prompt, options.schema);
-    const messages: GroqMessage[] = [{ role: "user", content: jsonPrompt }];
-    const request = this.buildRequest(model, messages, {
-      ...options.generationConfig,
-      temperature: 0.1, // Lower temperature for structured output
+    const request = GroqChatRequestBuilder.for(model)
+      .withMessages([createUserMessage(jsonPrompt)])
+      .withConfig({
+        ...options.generationConfig,
+        temperature: STRUCTURED_OUTPUT_TEMPERATURE,
+      })
+      .build();
+
+    return this.httpClient.postChatCompletion(request).then((response) => {
+      const content = this.extractContent(response.choices[0]?.message?.content);
+      return this.jsonParser.parse<T>(content);
     });
-
-    const response = await groqHttpClient.postChatCompletion(request);
-    const content = response.choices[0]?.message?.content;
-
-    if (!content) {
-      throw new GroqError(
-        GroqErrorType.UNKNOWN_ERROR,
-        "No content generated from Groq API"
-      );
-    }
-
-    // Parse JSON response
-    try {
-      const jsonMatch = content.match(/```json\n([\s\S]*?)\n```/) ||
-                      content.match(/\{[\s\S]*\}/);
-      const jsonStr = jsonMatch ? jsonMatch[1] || jsonMatch[0] : content;
-      const parsed = JSON.parse(jsonStr) as T;
-
-      return parsed;
-    } catch (error) {
-      throw new GroqError(
-        GroqErrorType.UNKNOWN_ERROR,
-        "Failed to parse structured response as JSON",
-        error as Error
-      );
-    }
   }
 
-  async streamCompletion(
+  streamCompletion(
     prompt: string,
     callbacks: StreamingCallbacks,
-    options: TextGenerationOptions = {}
-  ): Promise<void> {
-    const model = options.model || DEFAULT_MODELS.TEXT;
-    const messages: GroqMessage[] = [{ role: "user", content: prompt }];
-    const request = this.buildRequest(model, messages, options.generationConfig);
+    options: TextGenerationOptions = {},
+  ): Promise<string> {
+    return this.streamChatCompletion([createUserMessage(prompt)], callbacks, options);
+  }
+
+  /**
+   * Stream a chat completion given an existing message history.
+   * Resolves with the accumulated full text once the stream completes.
+   *
+   * @param messages - The full conversation history.
+   * @param callbacks - Streaming callbacks (`onChunk`, `onComplete`, `onError`).
+   * @param options - Generation options.
+   * @returns The full accumulated text.
+   */
+  async streamChatCompletion(
+    messages: ReadonlyArray<GroqMessage>,
+    callbacks: StreamingCallbacks,
+    options: TextGenerationOptions = {},
+  ): Promise<string> {
+    const model = options.model ?? DEFAULT_MODELS.TEXT;
+    const request = GroqChatRequestBuilder.for(model)
+      .withMessages(messages)
+      .withConfig(options.generationConfig)
+      .withStream(true)
+      .build();
+
+    const parser = new StreamingResponseParser({
+      onChunk: (chunk) => callbacks.onChunk?.(chunk),
+    });
 
     try {
-      const stream = await groqHttpClient.streamChatCompletion(request);
-      const reader = stream.getReader();
-      const decoder = new TextDecoder();
-      const contentChunks: string[] = []; // Use array instead of string concatenation
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value, { stream: true }); // Optimize with stream option
-        const lines = chunk.split("\n").filter(line => line.trim() !== "");
-
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            const data = line.slice(6);
-            if (data === "[DONE]") continue;
-
-            try {
-              const parsed = JSON.parse(data) as {
-                choices?: Array<{ delta?: { content?: string } }>;
-              };
-              const content = parsed.choices?.[0]?.delta?.content;
-              if (content) {
-                contentChunks.push(content); // Push to array instead of concatenation
-                callbacks.onChunk?.(content);
-              }
-            } catch {
-              // Skip invalid JSON chunks
-            }
-          }
-        }
-      }
-
-      // Join chunks at the end - more efficient than repeated concatenation
-      const fullContent = contentChunks.join('');
-      callbacks.onComplete?.(fullContent);
+      const stream = await this.httpClient.streamChatCompletion(request);
+      const fullText = await parser.parse(stream);
+      callbacks.onComplete?.(fullText);
+      return fullText;
     } catch (error) {
-      callbacks.onError?.(error as Error);
-      throw error;
+      const err = error instanceof Error ? error : new Error(String(error));
+      callbacks.onError?.(err);
+      throw err;
     }
   }
 
-  private buildRequest(
-    model: string,
-    messages: GroqMessage[],
-    config?: TextGenerationOptions["generationConfig"]
-  ): GroqChatRequest {
-    return {
-      model,
-      messages,
-      temperature: config?.temperature ?? DEFAULT_GENERATION_CONFIG.temperature,
-      max_tokens: config?.maxTokens ?? DEFAULT_GENERATION_CONFIG.maxTokens,
-      top_p: config?.topP ?? DEFAULT_GENERATION_CONFIG.topP,
-      n: config?.n,
-      stop: config?.stop,
-      frequency_penalty: config?.frequencyPenalty,
-      presence_penalty: config?.presencePenalty,
-    };
+  /**
+   * Clear the response cache (used by long-running services to free memory).
+   */
+  clearCache(): void {
+    this.cache.clear();
   }
 
-  private buildStructuredPrompt(
-    prompt: string,
-    schema?: Record<string, unknown>
-  ): string {
-    let structuredPrompt = `Please generate a JSON response for the following request.\n\n`;
-
-    if (schema) {
-      structuredPrompt += `Expected JSON schema:\n${JSON.stringify(schema, null, 2)}\n\n`;
+  private async executeWithCache(
+    params: Record<string, unknown>,
+    factory: () => Promise<string>,
+  ): Promise<string> {
+    const key = this.cache.generateKey(params);
+    const cached = this.cache.get<string>(key);
+    if (cached !== null) {
+      return cached;
     }
-
-    structuredPrompt += `Request:\n${prompt}\n\n`;
-    structuredPrompt += `Respond only with valid JSON, formatted as:\n\`\`\`json\n{...}\n\`\`\``;
-
-    return structuredPrompt;
+    const result = await factory();
+    this.cache.set(key, result);
+    return result;
   }
-}
 
-export const textGenerationService = new TextGenerationService();
-
-/**
- * Clear all cached responses
- */
-export function clearGenerationCache(): void {
-  cacheManager.clear();
-}
-
-/**
- * Get cache statistics
- */
-export function getCacheStats() {
-  return cacheManager.getStats();
+  private extractContent(content: string | undefined): string {
+    if (!content) {
+      throw new GroqError(
+        GroqErrorType.UNKNOWN_ERROR,
+        "No content generated from Groq API",
+      );
+    }
+    return content;
+  }
 }

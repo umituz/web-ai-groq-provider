@@ -1,33 +1,62 @@
 /**
  * useChat Hook
- * @description Main React hook for chat functionality with performance optimizations
+ * @description React hook for chat sessions with AI integration.
+ *
+ *              Features:
+ *              - Per-conversation message list with optional storage
+ *              - Streaming AI responses (opt-in via `stream: true`)
+ *              - Per-component AbortController: cancel in-flight requests
+ *                without affecting other consumers
+ *              - Errors surface through `onError` (no silent swallowing)
+ *              - Storage errors propagate the same way as generation errors
+ *
+ *              Requires an injected ChatService via the second argument
+ *              (typically obtained from `getProvider().chat`).
+ *
+ * @example
+ * ```tsx
+ * import { useChat, getProvider } from "@umituz/web-ai-groq-provider";
+ *
+ * function ChatScreen() {
+ *   const { messages, sendMessage, isLoading, isTyping, error } = useChat(
+ *     { conversationId: "demo-1" },
+ *     { chatService: getProvider()!.chat },
+ *   );
+ *   // ...
+ * }
+ * ```
  */
 
-import { useState, useCallback, useEffect, useRef } from "react";
-import type {
-  ChatMessage,
-  ChatConfig,
-} from "../entities";
-import type {
-  UseChatOptions,
-  UseChatReturn,
-} from "../interfaces";
-import { chatService } from "../services/chat.service";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { ChatConfig, ChatMessage } from "../entities";
+import type { UseChatOptions, UseChatReturn } from "../interfaces";
+import type { ChatService } from "../services/chat.service";
+import { chatIdGenerator } from "../utils/chat-id-generator";
+import { resolveUserFriendlyMessage } from "../../groq/utils/error-resolver";
+import { isMeaningfulMessageContent, trimMessageContent } from "../validators/message-content-validator";
 
-const MESSAGE_ID_PREFIX = "msg-";
+export interface UseChatDeps {
+  readonly chatService: ChatService;
+}
 
-/**
- * Hook for chat functionality with AI integration and performance optimizations
- */
-export function useChat(options: UseChatOptions): UseChatReturn {
+export function useChat(options: UseChatOptions, deps?: UseChatDeps): UseChatReturn {
+  const chatService = deps?.chatService;
+  if (!chatService) {
+    throw new Error(
+      "useChat requires a ChatService dependency. " +
+        "Provide it via the second argument or wire it through the app container.",
+    );
+  }
+
   const {
     conversationId,
     storage,
     config,
     autoSave = true,
-    onMessageSent: _onMessageSent,
-    onAIResponse: _onAIResponse,
-    onError: _onError,
+    stream: streamEnabled = false,
+    onMessageSent,
+    onAIResponse,
+    onError,
   } = options;
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -35,225 +64,257 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   const [isTyping, setIsTyping] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Refs for deduplication and callback tracking
-  const pendingMessageRef = useRef<string | null>(null);
-  const optionsRef = useRef(options);
-  optionsRef.current = options;
+  // Stable refs to keep callback identities stable across renders.
+  const storageRef = useRef(storage);
+  storageRef.current = storage;
+  const callbacksRef = useRef({ onMessageSent, onAIResponse, onError });
+  callbacksRef.current = { onMessageSent, onAIResponse, onError };
 
-  // Initialize chat service config
+  // Per-component abort controller; only this component's requests are cancelled.
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const surfaceError = useCallback((err: unknown) => {
+    const message = resolveUserFriendlyMessage(err);
+    setError(message);
+    callbacksRef.current.onError?.(message);
+  }, []);
+
   useEffect(() => {
     if (config) {
       chatService.initialize(config);
     }
-  }, [config]);
+  }, [chatService, config]);
 
-  // Cleanup on unmount
   useEffect(() => {
+    const currentStorage = storageRef.current;
+    if (!currentStorage) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const loaded = await currentStorage.getMessages(conversationId);
+        if (!cancelled) {
+          setMessages(loaded);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          surfaceError(err);
+        }
+      }
+    })();
+
     return () => {
-      pendingMessageRef.current = null;
+      cancelled = true;
+    };
+  }, [conversationId, surfaceError]);
+
+  // Cleanup on unmount: cancel any in-flight request.
+  useEffect(() => {
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    return () => {
+      controller.abort();
+      abortControllerRef.current = null;
     };
   }, []);
 
-  // Load messages from storage on mount
-  useEffect(() => {
-    if (!storage) return;
-
-    const loadMessages = async () => {
-      try {
-        const loaded = await storage.getMessages(conversationId);
-        setMessages(loaded);
-      } catch (_err) {
-        // Silently fail - errors are handled through onError callback if needed
-      }
-    };
-
-    void loadMessages();
-  }, [conversationId, storage]);
-
-  // Save message to storage (stable reference)
-  const saveToStorage = useCallback(
+  const persist = useCallback(
     async (message: ChatMessage) => {
-      if (!autoSave || !storage) return;
-
+      const currentStorage = storageRef.current;
+      if (!autoSave || !currentStorage) return;
       try {
-        await storage.saveMessage(conversationId, message);
-      } catch (_err) {
-        // Silently fail - errors are handled through onError callback if needed
+        await currentStorage.saveMessage(conversationId, message);
+      } catch (err) {
+        surfaceError(err);
       }
     },
-    [conversationId, storage, autoSave]
+    [autoSave, conversationId, surfaceError],
   );
 
-  // Batch save messages to storage (reserved for future use)
-  const _saveMessagesToStorage = useCallback(
-    async (messagesToSave: ChatMessage[]) => {
-      if (!autoSave || !storage || messagesToSave.length === 0) return;
-
-      try {
-        // Try batch save if supported
-        if ('saveMessages' in storage) {
-          await (storage as unknown as { saveMessages: (id: string, msgs: ChatMessage[]) => Promise<void> }).saveMessages(conversationId, messagesToSave);
-        } else {
-          // Fallback to individual saves in parallel
-          await Promise.all(
-            messagesToSave.map(msg => storage.saveMessage(conversationId, msg))
-          );
-        }
-      } catch (_err) {
-        // Silently fail
-      }
-    },
-    [conversationId, storage, autoSave]
-  );
-
-  // Send message with deduplication and functional updates
   const sendMessage = useCallback(
-    async (text: string, type?: ChatMessage["type"]): Promise<void> => {
-      if (!text.trim() || isLoading) return;
+    async (text: string, type?: ChatMessage["type"]): Promise<ChatMessage | null> => {
+      const trimmed = trimMessageContent(text);
+      if (!isMeaningfulMessageContent(trimmed)) return null;
+      if (isLoading) return null;
 
-      // Prevent duplicate messages
-      if (pendingMessageRef.current === text) {
-        return;
-      }
+      const controller = new AbortController();
+      abortControllerRef.current?.abort();
+      abortControllerRef.current = controller;
 
-      pendingMessageRef.current = text;
       setIsLoading(true);
       setError(null);
+      setIsTyping(true);
 
-      // Get latest callbacks from ref
-      const currentOptions = optionsRef.current;
+      const userMessage: ChatMessage = {
+        id: chatIdGenerator.next("user"),
+        sender: "user",
+        content: trimmed,
+        timestamp: new Date().toISOString(),
+        type: type ?? "text",
+      };
+
+      // Read the latest messages from the rendered state for AI context.
+      // This is the snapshot we send to the model.
+      let contextForAI: ReadonlyArray<ChatMessage> = [];
+      setMessages((prev) => {
+        contextForAI = prev;
+        return [...prev, userMessage];
+      });
+      void persist(userMessage);
+      callbacksRef.current.onMessageSent?.(userMessage);
 
       try {
-        // Create user message
-        const userMessage: ChatMessage = {
-          id: `${MESSAGE_ID_PREFIX}${Date.now()}-user`,
-          sender: "user",
-          content: text,
-          timestamp: new Date().toISOString(),
-          type: type || "text",
-        };
+        if (streamEnabled) {
+          // Streaming path: build a placeholder, then patch in chunks.
+          const placeholderId = chatIdGenerator.next("assistant");
+          const placeholder: ChatMessage = {
+            id: placeholderId,
+            sender: "assistant",
+            content: "",
+            timestamp: new Date().toISOString(),
+            type: "text",
+            metadata: { streaming: true },
+          };
+          setMessages((prev) => [...prev, placeholder]);
 
-        // Use functional update to avoid stale closure
-        setMessages(prev => {
-          const updated = [...prev, userMessage];
-          saveToStorage(userMessage);
-          currentOptions.onMessageSent?.(userMessage);
-          return updated;
-        });
+          const fullText = await chatService.generateStreamingResponse(
+            trimmed,
+            contextForAI,
+            (chunk) => {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === placeholderId
+                    ? { ...m, content: m.content + chunk }
+                    : m,
+                ),
+              );
+            },
+          );
 
-        // Generate AI response
-        setIsTyping(true);
-
-        // Get current messages for context
-        const contextForAI = messages; // Use closure messages, not functional update
+          const finalMessage: ChatMessage = {
+            ...placeholder,
+            content: fullText,
+            metadata: { ...placeholder.metadata, streaming: false },
+          };
+          // Replace placeholder with final message so the persisted version
+          // has stable content and metadata.
+          setMessages((prev) =>
+            prev.map((m) => (m.id === placeholderId ? finalMessage : m)),
+          );
+          void persist(finalMessage);
+          callbacksRef.current.onAIResponse?.(finalMessage);
+          return finalMessage;
+        }
 
         const aiResponse = await chatService.generateAIResponse(
           conversationId,
-          text,
-          contextForAI
+          trimmed,
+          contextForAI,
         );
 
-        // Use functional update for AI response
-        setMessages(prev => {
-          const updated = [...prev, aiResponse];
-          saveToStorage(aiResponse);
-          currentOptions.onAIResponse?.(aiResponse);
-          return updated;
-        });
+        setMessages((prev) => [...prev, aiResponse]);
+        void persist(aiResponse);
+        callbacksRef.current.onAIResponse?.(aiResponse);
+        return aiResponse;
       } catch (err) {
-        const errorMessage =
-          err instanceof Error ? err.message : "Failed to send message";
-        setError(errorMessage);
-        currentOptions.onError?.(errorMessage);
+        surfaceError(err);
+        return null;
       } finally {
         setIsLoading(false);
         setIsTyping(false);
-        pendingMessageRef.current = null;
+        if (abortControllerRef.current === controller) {
+          abortControllerRef.current = null;
+        }
       }
     },
-    [conversationId, isLoading, saveToStorage, messages]
+    [chatService, conversationId, isLoading, persist, streamEnabled, surfaceError],
   );
 
-  // Regenerate last AI response with functional updates
-  const regenerate = useCallback(async (): Promise<void> => {
-    // Use functional update to get latest messages
-    setMessages(currentMessages => {
-      if (currentMessages.length === 0 || isLoading) {
-        return currentMessages;
-      }
+  const cancel = useCallback(() => {
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    setIsLoading(false);
+    setIsTyping(false);
+  }, []);
 
-      const lastUserMessage = [...currentMessages]
-        .reverse()
-        .find((m) => m.sender === "user");
+  const regenerate = useCallback(async (): Promise<ChatMessage | null> => {
+    if (isLoading) return null;
 
-      if (!lastUserMessage) return currentMessages;
+    const currentMessages = messages;
+    if (currentMessages.length === 0) return null;
 
-      // Async operation - need to handle differently
-      setIsLoading(true);
-      setError(null);
+    const lastUserMessage = [...currentMessages]
+      .reverse()
+      .find((m) => m.sender === "user");
+    if (!lastUserMessage) return null;
 
-      const currentOptions = optionsRef.current;
+    // Drop the trailing AI message (if any) so we can replace it.
+    const trimmed =
+      currentMessages.length > 0 &&
+      currentMessages[currentMessages.length - 1].sender === "assistant"
+        ? currentMessages.slice(0, -1)
+        : currentMessages;
 
-      // Remove last AI message if exists
-      const messagesWithoutAI = currentMessages.filter(
-        (m, i) => !(i === currentMessages.length - 1 && m.sender === "assistant")
+    setIsLoading(true);
+    setError(null);
+    setIsTyping(true);
+
+    try {
+      const aiResponse = await chatService.generateAIResponse(
+        conversationId,
+        lastUserMessage.content,
+        trimmed,
       );
 
-      // Trigger async update
-      (async () => {
-        try {
-          // Generate new response
-          setIsTyping(true);
-          const aiResponse = await chatService.generateAIResponse(
-            conversationId,
-            lastUserMessage.content,
-            messagesWithoutAI.slice(0, -1)
-          );
+      setMessages((prev) => {
+        const lastIsAI =
+          prev.length > 0 && prev[prev.length - 1].sender === "assistant";
+        const base = lastIsAI ? prev.slice(0, -1) : prev;
+        return [...base, aiResponse];
+      });
 
-          // Update messages with new response
-          setMessages(prev => {
-            const lastIsAI = prev.length > 0 && prev[prev.length - 1].sender === "assistant";
-            const base = lastIsAI ? prev.slice(0, -1) : prev;
-            return [...base, aiResponse];
-          });
+      void persist(aiResponse);
+      callbacksRef.current.onAIResponse?.(aiResponse);
+      return aiResponse;
+    } catch (err) {
+      surfaceError(err);
+      return null;
+    } finally {
+      setIsLoading(false);
+      setIsTyping(false);
+    }
+  }, [chatService, conversationId, isLoading, messages, persist, surfaceError]);
 
-          // Save to storage
-          await saveToStorage(aiResponse);
-          currentOptions.onAIResponse?.(aiResponse);
-        } catch (err) {
-          const errorMessage =
-            err instanceof Error ? err.message : "Failed to regenerate";
-          setError(errorMessage);
-          currentOptions.onError?.(errorMessage);
-        } finally {
-          setIsLoading(false);
-          setIsTyping(false);
-        }
-      })();
-
-      return messagesWithoutAI;
-    });
-  }, [conversationId, isLoading, saveToStorage]);
-
-  // Clear all messages
   const clearMessages = useCallback(() => {
     setMessages([]);
     setError(null);
   }, []);
 
-  // Update configuration
-  const updateConfig = useCallback((newConfig: Partial<ChatConfig>) => {
-    chatService.updateConfig(newConfig);
-  }, []);
+  const clearError = useCallback(() => setError(null), []);
+
+  const reset = useCallback(() => {
+    cancel();
+    setError(null);
+  }, [cancel]);
+
+  const updateConfig = useCallback(
+    (newConfig: Partial<ChatConfig>) => {
+      chatService.updateConfig(newConfig);
+    },
+    [chatService],
+  );
 
   return {
     messages,
     isLoading,
-    error,
     isTyping,
+    error,
     sendMessage,
     regenerate,
+    cancel,
     clearMessages,
+    clearError,
+    reset,
     updateConfig,
   };
 }

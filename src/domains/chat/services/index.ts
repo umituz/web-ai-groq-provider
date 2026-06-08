@@ -1,5 +1,6 @@
 /**
- * Chat Services
+ * Chat Services Index
  */
 
-export { chatService, messageFormatter } from "./chat.service";
+export { ChatService, extractTokenUsage } from "./chat.service";
+export { messageFormatter } from "../utils/message-formatter";

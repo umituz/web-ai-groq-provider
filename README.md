@@ -1,50 +1,52 @@
-# @umituz/react-ai-groq-provider
+# @umituz/web-ai-groq-provider
 
-Groq AI text generation provider for React web applications. This package provides a clean, type-safe interface to Groq's ultra-fast LLM API.
+Groq AI text generation and chat provider for React web applications.
+Provides a clean, type-safe interface to Groq's ultra-fast LLM API with
+dependency-injected services, strategy-based request execution, and
+zero hardcoded language content.
 
 ## Features
 
-- 🚀 **Ultra-fast inference** - Groq delivers up to 1000 tokens/second
-- 💰 **Affordable pricing** - Starting from $0.05 per 1M tokens
-- 🎯 **Multiple models** - Llama 3.1 8B, Llama 3.3 70B, GPT-OSS, and more
-- 🔄 **Streaming support** - Real-time streaming responses
-- 📦 **Structured output** - Generate JSON with schema validation
-- 💬 **Chat sessions** - Multi-turn conversation management
-- 🔒 **Type-safe** - Full TypeScript support
-- 🪝 **React Hooks** - Easy integration with React
+- Ultra-fast inference (up to 1000 tokens/second)
+- Multiple models (Llama 3.x, GPT-OSS, Mixtral, Gemma 2, Kimi K2, Qwen 3)
+- Streaming responses via SSE
+- Structured JSON output with schema-aware prompts
+- Multi-turn chat sessions with pluggable prompt strategy
+- Type-safe, fully tree-shakable subpath imports
+- Dependency injection ready (no hidden singletons inside services)
+- React Hooks with isolated, component-scoped abort signals
 
 ## Installation
 
 ```bash
-npm install @umituz/react-ai-groq-provider
+npm install @umituz/web-ai-groq-provider
 # or
-yarn add @umituz/react-ai-groq-provider
+yarn add @umituz/web-ai-groq-provider
 # or
-pnpm add @umituz/react-ai-groq-provider
+pnpm add @umituz/web-ai-groq-provider
 ```
 
 ## Getting Started
 
 ### 1. Get a Groq API Key
 
-Sign up at [console.groq.com](https://console.groq.com) and get your API key.
+Sign up at [console.groq.com](https://console.groq.com) and obtain an API key.
 
-### 2. Initialize the Provider
+### 2. Initialize the Provider (once at app startup)
 
 ```typescript
-import { configureProvider } from "@umituz/react-ai-groq-provider";
+import { configureProvider } from "@umituz/web-ai-groq-provider";
 
-// Initialize with your API key
 configureProvider({
   apiKey: "your-groq-api-key",
-  defaultModel: "llama-3.3-70b-versatile", // Optional
+  defaultModel: "llama-3.3-70b-versatile", // optional
 });
 ```
 
-### 3. Use the useGroq Hook
+### 3. Use the `useGroq` Hook
 
 ```typescript
-import { useGroq } from "@umituz/react-ai-groq-provider";
+import { useGroq } from "@umituz/web-ai-groq-provider";
 
 function MyComponent() {
   const { generate, isLoading, error, result } = useGroq();
@@ -73,32 +75,56 @@ function MyComponent() {
 
 ## Usage Examples
 
-### Basic Text Generation
+### Dependency Injection (advanced)
+
+The hooks accept a second argument for explicit DI. Use this when you
+need full control over the container, e.g., for tests or per-tenant keys.
 
 ```typescript
-import { textGeneration } from "@umituz/react-ai-groq-provider";
+import { useGroq, GroqHttpClient, TextGenerationService } from "@umituz/web-ai-groq-provider";
 
-const result = await textGeneration("Explain quantum computing in simple terms");
+const httpClient = new GroqHttpClient();
+httpClient.initialize({ apiKey: "your-groq-api-key" });
+const textGeneration = new TextGenerationService(httpClient);
+
+function MyComponent() {
+  const { generate } = useGroq({}, { textGeneration });
+  // ...
+}
 ```
 
-### Chat Conversation
+### Streaming Responses
 
 ```typescript
-import { chatGeneration } from "@umituz/react-ai-groq-provider";
+import { useGroq } from "@umituz/web-ai-groq-provider";
 
-const messages = [
-  { role: "user", content: "What is React?" },
-  { role: "assistant", content: "React is..." },
-  { role: "user", content: "How does it differ from Vue?" },
-];
+function StreamingComponent() {
+  const { stream, result } = useGroq();
 
-const response = await chatGeneration(messages);
+  const handleStream = async () => {
+    await stream(
+      "Tell me a story",
+      (chunk) => {
+        console.log("Received chunk:", chunk);
+      },
+    );
+  };
+
+  return (
+    <div>
+      <button onClick={handleStream}>Stream Story</button>
+      {result && <p>{result}</p>}
+    </div>
+  );
+}
 ```
 
 ### Structured JSON Output
 
+Use the lower-level service when you need a structured payload.
+
 ```typescript
-import { structuredText } from "@umituz/react-ai-groq-provider";
+import { getProvider } from "@umituz/web-ai-groq-provider";
 
 interface TodoItem {
   title: string;
@@ -106,8 +132,9 @@ interface TodoItem {
   completed: boolean;
 }
 
-const todos = await structuredText<TodoItem>(
-  "Create a todo item for learning Groq API",
+const { textGeneration } = getProvider()!;
+const todo = await textGeneration.generateStructured<TodoItem>(
+  "Create a todo item for learning the Groq API",
   {
     schema: {
       type: "object",
@@ -117,74 +144,129 @@ const todos = await structuredText<TodoItem>(
         completed: { type: "boolean" },
       },
     },
-  }
+  },
 );
 ```
 
-### Streaming Responses
+### Chat Conversations
 
 ```typescript
-import { useGroq } from "@umituz/react-ai-groq-provider";
+import { getProvider, useChat } from "@umituz/web-ai-groq-provider";
 
-function StreamingComponent() {
-  const { stream } = useGroq();
+function Chat() {
+  const { messages, sendMessage, isLoading, error } = useChat({
+    conversationId: "demo-1",
+    config: { systemPrompt: "You are a helpful assistant." },
+  });
 
-  const handleStream = async () => {
-    let fullText = "";
-    await stream(
-      "Tell me a story",
-      (chunk) => {
-        fullText += chunk;
-        console.log("Received chunk:", chunk);
-        // Update UI with chunk
-      }
-    );
-  };
-
-  return <button onClick={handleStream}>Stream Story</button>;
+  return (
+    <div>
+      {messages.map((m) => (
+        <p key={m.id}>
+          <strong>{m.sender}:</strong> {m.content}
+        </p>
+      ))}
+      <button
+        disabled={isLoading}
+        onClick={() => sendMessage("What is React?")}
+      >
+        Ask
+      </button>
+      {error && <p>Error: {error}</p>}
+    </div>
+  );
 }
+```
+
+#### Pluggable Prompt Strategy
+
+`ChatService` does not hardcode any language or fallback content. Plug
+in your own prompt resolver:
+
+```typescript
+import { getProvider } from "@umituz/web-ai-groq-provider";
+
+const { chat } = getProvider()!;
+chat.setPromptStrategy({
+  resolve: (config) => config.systemPrompt ?? "Default prompt here.",
+});
 ```
 
 ## Available Models
 
-| Model | Speed | Context | Best For |
-|-------|-------|---------|----------|
-| `llama-3.1-8b-instant` | 560 T/s | 128K | Fast responses, simple tasks |
-| `llama-3.3-70b-versatile` | 280 T/s | 128K | General purpose, complex tasks |
-| `llama-3.1-70b-versatile` | 280 T/s | 128K | General purpose |
-| `openai/gpt-oss-20b` | 1000 T/s | 128K | Experimental, fastest |
-| `openai/gpt-oss-120b` | 400 T/s | 128K | Large tasks |
-| `mixtral-8x7b-32768` | 250 T/s | 32K | MoE model |
-| `gemma2-9b-it` | 450 T/s | 128K | Google's model |
+| Model                              | Speed    | Context | Notes                          |
+| ---------------------------------- | -------- | ------- | ------------------------------ |
+| `llama-3.1-8b-instant`             | 560 T/s  | 128K    | Fast responses, simple tasks   |
+| `llama-3.3-70b-versatile`          | 280 T/s  | 128K    | General purpose, complex tasks |
+| `llama-3.1-70b-versatile`          | 280 T/s  | 128K    | General purpose                |
+| `openai/gpt-oss-20b`               | 1000 T/s | 128K    | Experimental, fastest          |
+| `openai/gpt-oss-120b`              | 400 T/s  | 128K    | Large tasks                    |
+| `mixtral-8x7b-32768`               | 250 T/s  | 32K     | MoE model                      |
+| `gemma2-9b-it`                     | 450 T/s  | 128K    | Google                         |
+| `meta-llama/llama-4-scout-17b-16e-instruct` | ~30K T/s | large | Llama 4 Scout                  |
+| `moonshotai/kimi-k2-instruct`      | -        | -       | Moonshot AI                    |
+| `qwen/qwen3-32b`                   | -        | -       | Alibaba Qwen 3                 |
 
 ## Configuration
 
 ### Provider Configuration
 
 ```typescript
-import { configureProvider } from "@umituz/react-ai-groq-provider";
+import { configureProvider } from "@umituz/web-ai-groq-provider";
 
 configureProvider({
   apiKey: "your-api-key",
-  baseUrl: "https://api.groq.com/openai/v1", // Optional, default
-  timeoutMs: 60000, // Optional, default 60s
-  defaultModel: "llama-3.3-70b-versatile", // Optional
+  // All fields below are optional.
+  baseUrl: "https://api.groq.com/openai/v1",
+  timeoutMs: 60_000,
+  textModel: "llama-3.3-70b-versatile",
 });
 ```
 
 ### Generation Configuration
 
+Pass a `GroqGenerationConfig` to the hook methods.
+
 ```typescript
-import { GenerationConfigBuilder } from "@umituz/react-ai-groq-provider";
+const { generate } = useGroq();
 
-const config = GenerationConfigBuilder.create()
-  .withTemperature(0.7)
-  .withMaxTokens(1024)
-  .withTopP(0.9)
-  .build();
-
-await textGeneration("Your prompt", { generationConfig: config });
+await generate("Your prompt", {
+  temperature: 0.7,
+  maxTokens: 1024,
+  topP: 0.9,
+});
 ```
+
+## Architecture
+
+```
+src/
+  provider.ts                    # App-level composition root
+  domains/
+    groq/
+      clients/                   # Transport + config + facade
+      services/                  # High-level text generation orchestrator
+      strategies/                # Retry / Queue / Dedupe / Composite
+      builders/                  # Request + structured prompt builders
+      parsers/                   # Streaming + JSON response parsers
+      hooks/                     # useGroq
+      utils/                     # Cache, retry, debounce, errors, etc.
+      constants/                 # Models, error types, protocols, IDs
+      entities/                  # Domain types
+      interfaces/                # Contracts
+    chat/
+      services/                  # ChatService
+      hooks/                     # useChat
+      utils/                     # Formatter, ID generator, prompt strategy
+      entities/                  # Domain types
+      interfaces/                # Contracts
+```
+
+The package follows SOLID throughout. Request execution is composed via
+the Strategy pattern (`CompositeExecutor` of `RetryExecutor`,
+`QueueExecutor`, and `DedupeExecutor`), so adding a new behavior is a
+matter of providing a new `IRequestExecutor` and inserting it into the
+chain.
 
 ## License
 

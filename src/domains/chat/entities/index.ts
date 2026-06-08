@@ -1,5 +1,5 @@
 /**
- * Chat Entities
+ * Chat Entities Index
  */
 
 export type {
@@ -11,4 +11,5 @@ export type {
   SendMessageResult,
   ChatConfig,
   IChatStorage,
+  ChatTokenUsage,
 } from "./chat.entities";

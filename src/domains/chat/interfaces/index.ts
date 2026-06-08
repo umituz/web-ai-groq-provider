@@ -1,5 +1,5 @@
 /**
- * Chat Interfaces
+ * Chat Interfaces Index
  */
 
 export type {
@@ -7,4 +7,5 @@ export type {
   UseChatOptions,
   UseChatReturn,
   IMessageFormatter,
+  SystemPromptStrategy,
 } from "./chat.interface";

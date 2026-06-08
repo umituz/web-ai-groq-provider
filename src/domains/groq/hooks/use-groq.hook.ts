@@ -1,189 +1,203 @@
 /**
  * useGroq Hook
- * @description Main React hook for Groq text generation with performance optimizations
+ * @description React hook for Groq text generation.
+ *              Each component instance owns its own AbortController
+ *              so unmounting one component does NOT cancel requests
+ *              issued by other consumers. Use `cancel()` to abort
+ *              an in-flight request from the same component.
+ *
+ * @example
+ * ```tsx
+ * import { useGroq, getProvider } from "@umituz/web-ai-groq-provider";
+ *
+ * function MyComponent() {
+ *   const { generate, isLoading, error, result, cancel } = useGroq(
+ *     { model: "llama-3.3-70b-versatile" },
+ *     { textGeneration: getProvider()!.textGeneration },
+ *   );
+ *   // ...
+ * }
+ * ```
  */
 
-import { useState, useCallback, useMemo, useRef, useEffect } from "react";
-import type { GroqGenerationConfig } from "../interfaces";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { GroqGenerationConfig } from "../entities";
 import type { StreamingCallbacks } from "../interfaces";
-import { textGenerationService } from "../services";
-import { getUserFriendlyError } from "../utils/error.util";
-import { groqHttpClient } from "../services/http-client.service";
+import type { TextGenerationService } from "../services";
+import { resolveUserFriendlyMessage } from "../utils/error-resolver";
 
 export interface UseGroqOptions {
-  /** Initial model to use */
   readonly model?: string;
-  /** Default generation config */
   readonly generationConfig?: GroqGenerationConfig;
-  /** Callback when generation starts */
   readonly onStart?: () => void;
-  /** Callback when generation completes */
   readonly onSuccess?: (result: string) => void;
-  /** Callback when generation fails */
   readonly onError?: (error: string) => void;
 }
 
 export interface UseGroqReturn {
-  /** Loading state */
   readonly isLoading: boolean;
-  /** Error message */
   readonly error: string | null;
-  /** Generated result */
   readonly result: string | null;
-  /** Generate text from a prompt */
-  generate: (prompt: string, options?: GroqGenerationConfig) => Promise<string>;
-  /** Generate structured JSON output */
+  /** Generate a completion from a single prompt. */
+  generate: (prompt: string, options?: GroqGenerationConfig) => Promise<string | null>;
+  /** Generate a structured JSON completion. */
   generateJSON: <T = Record<string, unknown>>(
     prompt: string,
-    options?: GroqGenerationConfig & { schema?: Record<string, unknown> }
-  ) => Promise<T>;
-  /** Stream text generation */
+    options?: GroqGenerationConfig & { schema?: Record<string, unknown> },
+  ) => Promise<T | null>;
+  /** Stream a completion. Returns the full text. */
   stream: (
     prompt: string,
     onChunk: (chunk: string) => void,
-    options?: GroqGenerationConfig
-  ) => Promise<void>;
-  /** Reset state */
+    options?: GroqGenerationConfig,
+  ) => Promise<string | null>;
+  /** Cancel any in-flight request issued by this hook instance. */
+  cancel: () => void;
+  /** Reset the hook state to its initial values. Does not clear the cache. */
   reset: () => void;
-  /** Clear error */
+  /** Clear the error state. */
   clearError: () => void;
 }
 
-/**
- * Hook for Groq text generation with performance optimizations
- */
-export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
+export interface UseGroqDeps {
+  readonly textGeneration: TextGenerationService;
+}
+
+export function useGroq(
+  options: UseGroqOptions = {},
+  deps?: UseGroqDeps,
+): UseGroqReturn {
+  const textGeneration = deps?.textGeneration;
+
+  if (!textGeneration) {
+    throw new Error(
+      "useGroq requires a TextGenerationService dependency. " +
+        "Provide it via the second argument or wire it through the app container.",
+    );
+  }
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
 
-  // Use ref for callbacks to avoid stale closures and unstable references
   const optionsRef = useRef(options);
   optionsRef.current = options;
 
-  // Memoize only the stable configuration values (not callbacks)
+  // Component-scoped abort controller: only this component's requests are cancelled.
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   const stableConfig = useMemo(
     () => ({
       model: options.model,
       generationConfig: options.generationConfig,
     }),
-    [options.model, options.generationConfig?.temperature, options.generationConfig?.maxTokens, options.generationConfig?.topP]
+    [
+      options.model,
+      options.generationConfig?.temperature,
+      options.generationConfig?.maxTokens,
+      options.generationConfig?.topP,
+    ],
   );
 
-  // Cleanup pending requests on unmount
   useEffect(() => {
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     return () => {
-      groqHttpClient.cancelPendingRequests();
+      controller.abort();
+      abortControllerRef.current = null;
     };
   }, []);
 
-  const generate = useCallback(
-    async (prompt: string, config?: GroqGenerationConfig): Promise<string> => {
+  const runWithState = useCallback(
+    async <T>(task: (signal: AbortSignal) => Promise<T>): Promise<T | null> => {
+      const controller = abortControllerRef.current;
+      if (!controller) {
+        // Already unmounted.
+        return null;
+      }
+      const { signal } = controller;
+      if (signal.aborted) return null;
+
       setIsLoading(true);
       setError(null);
       setResult(null);
-
-      // Use ref to get latest callbacks without adding to dependencies
       const currentOptions = optionsRef.current;
       currentOptions.onStart?.();
-
       try {
-        const response = await textGenerationService.generateCompletion(prompt, {
+        const value = await task(signal);
+        return value;
+      } catch (err) {
+        if (signal.aborted) {
+          // Caller chose to cancel; suppress error propagation.
+          return null;
+        }
+        const message = resolveUserFriendlyMessage(err);
+        setError(message);
+        currentOptions.onError?.(message);
+        throw err;
+      } finally {
+        if (!signal.aborted) {
+          setIsLoading(false);
+        }
+      }
+    },
+    [],
+  );
+
+  const generate = useCallback(
+    (prompt: string, config?: GroqGenerationConfig) =>
+      runWithState(async () => {
+        const response = await textGeneration.generateCompletion(prompt, {
           model: stableConfig.model,
           generationConfig: {
             ...stableConfig.generationConfig,
             ...config,
           },
         });
-
         setResult(response);
-        currentOptions.onSuccess?.(response);
-
+        optionsRef.current.onSuccess?.(response);
         return response;
-      } catch (err) {
-        const errorMessage = getUserFriendlyError(
-          err instanceof Error ? err : new Error("Unknown error")
-        );
-        setError(errorMessage);
-        currentOptions.onError?.(errorMessage);
-
-        throw err;
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [stableConfig]
+      }),
+    [runWithState, textGeneration, stableConfig],
   );
 
   const generateJSON = useCallback(
-    async <T = Record<string, unknown>,>(
+    <T = Record<string, unknown>,>(
       prompt: string,
-      config?: GroqGenerationConfig & { schema?: Record<string, unknown> }
-    ): Promise<T> => {
-      setIsLoading(true);
-      setError(null);
-      setResult(null);
-
-      const currentOptions = optionsRef.current;
-      currentOptions.onStart?.();
-
-      try {
-        const response = await textGenerationService.generateStructured<T>(prompt, {
+      config?: GroqGenerationConfig & { schema?: Record<string, unknown> },
+    ) =>
+      runWithState(async () => {
+        const response = await textGeneration.generateStructured<T>(prompt, {
           model: stableConfig.model,
           generationConfig: {
             ...stableConfig.generationConfig,
             ...config,
           },
-          schema: config?.schema,
+          ...(config?.schema !== undefined ? { schema: config.schema } : {}),
         });
-
-        const jsonString = JSON.stringify(response, null, 2);
-        setResult(jsonString);
-        currentOptions.onSuccess?.(jsonString);
-
+        const json = JSON.stringify(response, null, 2);
+        setResult(json);
+        optionsRef.current.onSuccess?.(json);
         return response;
-      } catch (err) {
-        const errorMessage = getUserFriendlyError(
-          err instanceof Error ? err : new Error("Unknown error")
-        );
-        setError(errorMessage);
-        currentOptions.onError?.(errorMessage);
-
-        throw err;
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [stableConfig]
+      }),
+    [runWithState, textGeneration, stableConfig],
   );
 
   const stream = useCallback(
-    async (
+    (
       prompt: string,
       onChunk: (chunk: string) => void,
-      config?: GroqGenerationConfig
-    ): Promise<void> => {
-      setIsLoading(true);
-      setError(null);
-      setResult(null);
-
-      const contentChunks: string[] = [];
-      const currentOptions = optionsRef.current;
-      currentOptions.onStart?.();
-
-      try {
+      config?: GroqGenerationConfig,
+    ) =>
+      runWithState(async () => {
         const callbacks: StreamingCallbacks = {
-          onChunk: (c) => {
-            contentChunks.push(c); // Use array accumulation
-            onChunk(c);
-          },
+          onChunk,
           onComplete: (text) => {
             setResult(text);
-            currentOptions.onSuccess?.(text);
+            optionsRef.current.onSuccess?.(text);
           },
         };
-
-        await textGenerationService.streamCompletion(
+        return textGeneration.streamCompletion(
           prompt,
           callbacks,
           {
@@ -192,32 +206,24 @@ export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
               ...stableConfig.generationConfig,
               ...config,
             },
-          }
+          },
         );
-      } catch (err) {
-        const errorMessage = getUserFriendlyError(
-          err instanceof Error ? err : new Error("Unknown error")
-        );
-        setError(errorMessage);
-        currentOptions.onError?.(errorMessage);
-
-        throw err;
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [stableConfig]
+      }),
+    [runWithState, textGeneration, stableConfig],
   );
 
-  const reset = useCallback(() => {
+  const cancel = useCallback(() => {
+    abortControllerRef.current?.abort();
     setIsLoading(false);
-    setError(null);
-    setResult(null);
   }, []);
 
-  const clearError = useCallback(() => {
+  const reset = useCallback(() => {
+    cancel();
     setError(null);
-  }, []);
+    setResult(null);
+  }, [cancel]);
+
+  const clearError = useCallback(() => setError(null), []);
 
   return {
     isLoading,
@@ -226,6 +232,7 @@ export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
     generate,
     generateJSON,
     stream,
+    cancel,
     reset,
     clearError,
   };

@@ -1,57 +1,40 @@
 /**
- * Message Utilities
- * @description Helper functions for creating and working with messages
+ * Message Factory and Transformer
+ * @description Builders and converters for Groq messages
  */
 
 import type { GroqMessage, GroqMessageRole } from "../entities";
 
-/**
- * Create a user message
- */
-export function createUserMessage(content: string): GroqMessage {
-  return { role: "user", content };
-}
+export const createUserMessage = (content: string): GroqMessage => ({
+  role: "user",
+  content,
+});
 
-/**
- * Create an assistant message
- */
-export function createAssistantMessage(content: string): GroqMessage {
-  return { role: "assistant", content };
-}
+export const createAssistantMessage = (content: string): GroqMessage => ({
+  role: "assistant",
+  content,
+});
 
-/**
- * Create a system message
- */
-export function createSystemMessage(content: string): GroqMessage {
-  return { role: "system", content };
-}
+export const createSystemMessage = (content: string): GroqMessage => ({
+  role: "system",
+  content,
+});
 
-/**
- * Create a text message with specified role
- */
-export function createTextMessage(role: GroqMessageRole, content: string): GroqMessage {
-  return { role, content };
-}
+export const createMessage = (role: GroqMessageRole, content: string): GroqMessage => ({
+  role,
+  content,
+});
 
-/**
- * Convert a simple prompt to message array
- */
-export function promptToMessages(prompt: string): GroqMessage[] {
-  return [{ role: "user", content: prompt }];
-}
+export const promptToMessages = (prompt: string): GroqMessage[] => [
+  createUserMessage(prompt),
+];
 
-/**
- * Extract text content from messages
- */
-export function extractTextFromMessages(messages: GroqMessage[]): string {
-  return messages.map(m => m.content).join("\n\n");
-}
+export const extractTextFromMessages = (messages: ReadonlyArray<GroqMessage>): string =>
+  messages.map((m) => m.content).join("\n\n");
 
-/**
- * Format messages for display
- */
-export function formatMessagesForDisplay(messages: GroqMessage[]): string {
-  return messages
-    .map(m => `[${m.role.toUpperCase()}]: ${m.content}`)
+export const formatMessagesForDisplay = (
+  messages: ReadonlyArray<GroqMessage>,
+): string =>
+  messages
+    .map((m) => `[${m.role.toUpperCase()}]: ${m.content}`)
     .join("\n\n---\n\n");
-}

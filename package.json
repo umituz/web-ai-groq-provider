@@ -1,22 +1,36 @@
 {
   "name": "@umituz/web-ai-groq-provider",
   "version": "1.1.13",
-  "description": "Groq AI text generation provider for React web applications",
+  "description": "Groq AI text generation and chat provider for React web applications",
   "type": "module",
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
-  "sideEffects": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./groq": "./src/domains/groq/index.ts",
-    "./chat": "./src/domains/chat/index.ts",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./groq": {
+      "types": "./dist/domains/groq/index.d.ts",
+      "import": "./dist/domains/groq/index.js",
+      "require": "./dist/domains/groq/index.cjs"
+    },
+    "./chat": {
+      "types": "./dist/domains/chat/index.d.ts",
+      "import": "./dist/domains/chat/index.js",
+      "require": "./dist/domains/chat/index.cjs"
+    },
     "./package.json": "./package.json"
   },
+  "sideEffects": false,
   "scripts": {
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "build": "tsup src/index.ts --format cjs,esm --dts --clean --external react",
-    "dev": "tsup src/index.ts --format cjs,esm --dts --watch --external react",
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test:scenarios": "echo 'See TEST_SCENARIOS.md for manual test scenarios'",
     "version:patch": "npm version patch -m 'chore: release v%s'",
     "version:minor": "npm version minor -m 'chore: release v%s'",
     "version:major": "npm version major -m 'chore: release v%s'"
@@ -54,7 +68,7 @@
     "access": "public"
   },
   "files": [
-    "src",
+    "dist",
     "README.md",
     "LICENSE"
   ]

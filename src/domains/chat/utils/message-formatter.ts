@@ -1,33 +1,31 @@
 /**
- * Message Formatter Utility
- * @description Convert between chat messages and Groq format
+ * Message Formatter
+ * @description Converts between ChatMessage (domain) and GroqMessage (transport).
+ *              Does NOT include any prompts or fallback content; those are
+ *              injected by the consumer (see prompt-strategy.ts).
  */
 
 import type { IMessageFormatter } from "../interfaces";
 import type { ChatMessage } from "../entities";
 import type { GroqMessage } from "../../groq/entities";
+import type { ChatIdGenerator } from "./chat-id-generator";
+import { chatIdGenerator as defaultIdGenerator } from "./chat-id-generator";
+import { ASSISTANT_ROLE, USER_ROLE } from "../../groq/constants/identifier.constants";
 
-const MESSAGE_ID_PREFIX = "msg-";
+export class MessageFormatter implements IMessageFormatter {
+  constructor(private readonly idGenerator: ChatIdGenerator = defaultIdGenerator) {}
 
-class MessageFormatter implements IMessageFormatter {
-  toGroqMessages(messages: ChatMessage[], systemPrompt?: string): GroqMessage[] {
+  toGroqMessages(messages: ReadonlyArray<ChatMessage>, systemPrompt?: string): GroqMessage[] {
     const groqMessages: GroqMessage[] = [];
 
-    // Add system prompt first
     if (systemPrompt) {
-      groqMessages.push({
-        role: "system",
-        content: systemPrompt,
-      });
+      groqMessages.push({ role: "system", content: systemPrompt });
     }
 
-    // Convert chat messages to Groq format
     for (const message of messages) {
-      // Skip system messages from context
       if (message.sender === "system") continue;
-
       groqMessages.push({
-        role: message.sender === "user" ? "user" : "assistant",
+        role: message.sender === "user" ? USER_ROLE : ASSISTANT_ROLE,
         content: message.content,
       });
     }
@@ -37,7 +35,7 @@ class MessageFormatter implements IMessageFormatter {
 
   toChatMessage(content: string, sender: ChatMessage["sender"]): ChatMessage {
     return {
-      id: `${MESSAGE_ID_PREFIX}${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+      id: this.idGenerator.next(sender),
       sender,
       content: content.trim(),
       timestamp: new Date().toISOString(),

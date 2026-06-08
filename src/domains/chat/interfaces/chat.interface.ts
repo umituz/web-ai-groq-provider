@@ -1,6 +1,6 @@
 /**
  * Chat Service Interfaces
- * @description Contracts for chat functionality
+ * @description Contracts for chat functionality.
  */
 
 import type {
@@ -12,69 +12,99 @@ import type {
   IChatStorage,
 } from "../entities";
 import type { GroqMessage } from "../../groq/entities";
+import type { SystemPromptStrategy } from "../utils/prompt-strategy";
 
 /**
- * Chat service interface
+ * Chat service contract. The high-level service used by `useChat`
+ * and any other consumer (e.g., CLI, server, scripts).
  */
 export interface IChatService {
-  /** Send message and get AI response */
+  /** Send a single turn and get the user message + AI response back. */
   sendMessage(input: SendMessageInput): Promise<SendMessageResult>;
-  /** Get conversation history */
+  /** Get a single conversation summary by id. */
   getConversation(conversationId: string): Promise<ChatConversation | null>;
-  /** Get all conversations */
+  /** List conversations. The default implementation returns an empty list. */
   getConversations(): Promise<ChatConversation[]>;
-  /** Generate AI response only */
-  generateAIResponse(companionId: string, userMessage: string, context?: ChatMessage[]): Promise<ChatMessage>;
+  /** Generate the AI response for a single turn given context. */
+  generateAIResponse(
+    companionId: string,
+    userMessage: string,
+    context?: ReadonlyArray<ChatMessage>,
+  ): Promise<ChatMessage>;
+  /** Generate a streaming AI response, emitting chunks via the callback. */
+  generateStreamingResponse(
+    userMessage: string,
+    context: ReadonlyArray<ChatMessage>,
+    onChunk: (chunk: string) => void,
+  ): Promise<string>;
 }
 
 /**
- * Chat hook options
+ * Options for the `useChat` hook.
+ *
+ * @example
+ * ```typescript
+ * const opts: UseChatOptions = {
+ *   conversationId: "session-1",
+ *   stream: true,
+ *   storage: myStorageImpl,
+ *   config: { systemPrompt: "You are a helpful assistant.", temperature: 0.7 },
+ * };
+ * ```
  */
 export interface UseChatOptions {
-  /** Conversation identifier */
+  /** Conversation identifier; also used as the storage key. */
   readonly conversationId: string;
-  /** Storage implementation */
+  /** Optional storage implementation. When omitted, the hook is in-memory only. */
   readonly storage?: IChatStorage;
-  /** Chat configuration */
+  /** Chat configuration (system prompt, temperature, max tokens). */
   readonly config?: ChatConfig;
-  /** Auto-save messages */
+  /** When true (default), messages are persisted to storage automatically. */
   readonly autoSave?: boolean;
-  /** Callback on message sent */
+  /** When true, AI responses are streamed. Default: false. */
+  readonly stream?: boolean;
   readonly onMessageSent?: (message: ChatMessage) => void;
-  /** Callback on AI response */
   readonly onAIResponse?: (message: ChatMessage) => void;
-  /** Callback on error */
   readonly onError?: (error: string) => void;
 }
 
 /**
- * Chat hook return value
+ * Return value of the `useChat` hook.
  */
 export interface UseChatReturn {
-  /** Messages in conversation */
-  readonly messages: ChatMessage[];
-  /** Loading state */
+  /** Messages in the current conversation. */
+  readonly messages: ReadonlyArray<ChatMessage>;
+  /** True while a request is in flight (any turn). */
   readonly isLoading: boolean;
-  /** Error message */
-  readonly error: string | null;
-  /** Is AI typing */
+  /** True while the assistant is producing a response (including streaming). */
   readonly isTyping: boolean;
-  /** Send message */
-  sendMessage: (text: string, type?: ChatMessage["type"]) => Promise<void>;
-  /** Regenerate last AI response */
-  regenerate: () => Promise<void>;
-  /** Clear messages */
+  /** Last error message; null when there is no error. */
+  readonly error: string | null;
+  /** Send a message; resolves with the AI response (or null on cancel/error). */
+  sendMessage: (
+    text: string,
+    type?: ChatMessage["type"],
+  ) => Promise<ChatMessage | null>;
+  /** Regenerate the most recent assistant response. */
+  regenerate: () => Promise<ChatMessage | null>;
+  /** Cancel any in-flight request issued by this hook instance. */
+  cancel: () => void;
+  /** Clear all messages and the error state. */
   clearMessages: () => void;
-  /** Update configuration */
+  /** Clear the error state only. */
+  clearError: () => void;
+  /** Reset transient state (loading/typing/error). Keeps messages. */
+  reset: () => void;
+  /** Update the chat configuration. */
   updateConfig: (config: Partial<ChatConfig>) => void;
 }
 
-/**
- * Message formatter for Groq
- */
 export interface IMessageFormatter {
-  /** Format chat messages to Groq format */
-  toGroqMessages(messages: ChatMessage[], systemPrompt?: string): GroqMessage[];
-  /** Format Groq response to chat message */
+  toGroqMessages(
+    messages: ReadonlyArray<ChatMessage>,
+    systemPrompt?: string,
+  ): GroqMessage[];
   toChatMessage(content: string, sender: ChatMessage["sender"]): ChatMessage;
 }
+
+export type { SystemPromptStrategy };

@@ -1,15 +1,17 @@
 /**
  * @umituz/web-ai-groq-provider
- * Groq AI text generation and chat provider for React web applications
+ * Groq AI text generation and chat provider for React web applications.
  *
  * @author umituz
  * @license MIT
  *
- * For better tree-shaking, use subpath imports:
- * - @umituz/web-ai-groq-provider/groq - Groq API client
- * - @umituz/web-ai-groq-provider/chat - Chat functionality
+ * Subpath imports for tree-shaking:
+ * - @umituz/web-ai-groq-provider/groq
+ * - @umituz/web-ai-groq-provider/chat
  */
 
-// Re-export all domains
 export * from "./domains/groq/index";
 export * from "./domains/chat/index";
+
+export { configureProvider, getProvider, resetProvider } from "./provider";
+export type { AppContainer } from "./provider";

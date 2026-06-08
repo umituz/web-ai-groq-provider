@@ -1,113 +1,101 @@
 /**
  * Chat Domain Entities
- * @description Core chat message and conversation types
+ * @description Core chat message and conversation types.
+ *              All fields are readonly: consumers must not mutate
+ *              messages that are in-flight or persisted.
  */
 
-/**
- * Message sender type
- */
 export type ChatMessageSender = "user" | "assistant" | "system";
 
-/**
- * Message content types
- */
 export type ChatMessageType = "text" | "image" | "audio" | "sticker";
 
 /**
- * Chat message structure
+ * Chat message structure.
+ * Use the `metadata` field for provider-specific or app-specific data
+ * (e.g., model name, token usage, reactions, or any other extension).
  */
 export interface ChatMessage {
-  /** Unique message identifier */
   readonly id: string;
-  /** Sender of the message */
   readonly sender: ChatMessageSender;
-  /** Message content */
   readonly content: string;
-  /** Timestamp in ISO format */
   readonly timestamp: string;
-  /** Message type */
   readonly type?: ChatMessageType;
-  /** Image URL for image messages */
   readonly imageUrl?: string;
-  /** Reaction emoji */
   readonly reaction?: string;
-  /** Metadata */
-  readonly metadata?: Record<string, unknown>;
+  readonly metadata?: Readonly<Record<string, unknown>>;
 }
 
 /**
- * Conversation/session metadata
+ * Conversation metadata, derived from the message history of a conversation.
  */
 export interface ChatConversation {
-  /** Unique conversation identifier */
   readonly id: string;
-  /** Companion/character identifier */
   readonly companionId: string;
-  /** Companion name */
   readonly companionName: string;
-  /** Last message */
   readonly lastMessage?: ChatMessage;
-  /** Message count */
   readonly messageCount: number;
-  /** Updated timestamp */
   readonly updatedAt: string;
-  /** Is pinned */
-  readonly pinned?: boolean;
-  /** Is archived */
-  readonly archived?: boolean;
 }
 
 /**
- * Send message input
+ * Input for a single chat turn.
+ * The companionId is the addressable identifier for the chat partner
+ * (e.g., a character, agent, or session).
  */
 export interface SendMessageInput {
-  /** Companion identifier */
   readonly companionId: string;
-  /** Message text */
   readonly text: string;
-  /** Message type */
   readonly type?: ChatMessageType;
-  /** Image URL */
   readonly imageUrl?: string;
 }
 
 /**
- * Send message result
+ * Result of a single chat turn: the user message that was sent
+ * and the assistant's reply (if generation succeeded).
  */
 export interface SendMessageResult {
-  /** User message */
   readonly userMessage: ChatMessage;
-  /** AI response (if generated) */
   readonly aiResponse?: ChatMessage;
 }
 
 /**
- * Chat configuration
+ * Chat configuration.
+ *
+ * @example
+ * ```typescript
+ * const config: ChatConfig = {
+ *   systemPrompt: "You are a helpful assistant.",
+ *   temperature: 0.7,
+ *   maxTokens: 800,
+ * };
+ * ```
  */
 export interface ChatConfig {
-  /** System prompt for AI personality */
+  /** System prompt prepended to the conversation. */
   readonly systemPrompt?: string;
-  /** Temperature for randomness */
+  /** Sampling temperature (0.0 - 2.0). */
   readonly temperature?: number;
-  /** Maximum tokens */
+  /** Maximum number of tokens to generate per response. */
   readonly maxTokens?: number;
-  /** Include timestamp in messages */
-  readonly includeTimestamp?: boolean;
-  /** Language code (e.g., 'tr', 'en') */
-  readonly language?: string;
 }
 
 /**
- * Storage interface for persisting messages
- * Implementations should be provided by the application
+ * Storage contract for persisting chat messages.
+ * The host application provides an implementation; the library never
+ * persists on its own.
  */
 export interface IChatStorage {
-  /** Save message to storage */
   saveMessage(conversationId: string, message: ChatMessage): Promise<void>;
-  /** Get messages for conversation */
   getMessages(conversationId: string): Promise<ChatMessage[]>;
-  /** Update message */
   updateMessage(messageId: string, updates: Partial<ChatMessage>): Promise<void>;
-  /** Delete message */
   deleteMessage(messageId: string): Promise<void>;
+}
+
+/**
+ * Token usage information returned by the model, normalized to the chat layer.
+ */
+export interface ChatTokenUsage {
+  readonly promptTokens: number;
+  readonly completionTokens: number;
+  readonly totalTokens: number;
 }

@@ -1,11 +1,13 @@
 /**
  * Groq Domain
- * @description Groq API client and text generation
- * Subpath: @umituz/web-ai-groq-provider/groq
+ * @description Groq API client, text generation, and supporting infrastructure.
+ *              Subpath: @umituz/web-ai-groq-provider/groq
  */
 
 // Entities
 export type {
+  GroqConfig,
+  GroqGenerationConfig,
   GroqMessageRole,
   GroqMessage,
   GroqChatRequest,
@@ -18,26 +20,22 @@ export type {
   GroqErrorResponse,
 } from "./entities";
 
-export type {
-  GroqConfig,
-  GroqGenerationConfig,
-} from "./entities";
-
 // Interfaces
 export type {
   TextGenerationOptions,
   StreamingCallbacks,
   StructuredGenerationOptions,
+  IGroqChatService,
+  IGroqHttpClient,
 } from "./interfaces";
 
-export type { IGroqChatService, IGroqHttpClient } from "./interfaces";
-
 // Services
-export { textGenerationService, groqHttpClient } from "./services";
+export { TextGenerationService, GroqHttpClient, GroqHttpTransport, GroqConfigStore } from "./services";
+export type { GroqHttpClientDeps } from "./services";
 
 // Hooks
-export { useGroq } from "./hooks";
-export type { UseGroqOptions, UseGroqReturn } from "./hooks";
+export { useGroq, useCacheStats } from "./hooks";
+export type { UseGroqOptions, UseGroqReturn, UseGroqDeps, UseCacheStatsOptions } from "./hooks";
 
 // Constants
 export {
@@ -47,26 +45,50 @@ export {
   API_ENDPOINTS,
   DEFAULT_BASE_URL,
   TIMEOUTS,
+  GroqErrorType,
+  USER_FRIENDLY_ERROR_MESSAGES,
 } from "./constants";
 
+// Builders
+export { GroqChatRequestBuilder, StructuredPromptBuilder } from "./builders";
+
+// Parsers
+export { StreamingResponseParser, JsonResponseParser } from "./parsers";
+export type { StreamingParserCallbacks } from "./parsers";
+
+// Strategies
 export {
-  GroqErrorType,
-  mapHttpStatusToErrorType,
-  isRetryableError,
-  isAuthError,
-} from "./constants";
+  RetryExecutor,
+  QueueExecutor,
+  DedupeExecutor,
+  CompositeExecutor,
+} from "./strategies";
+export type { IRequestExecutor, DedupeExecutorOptions } from "./strategies";
 
 // Utils
 export {
   createUserMessage,
   createAssistantMessage,
   createSystemMessage,
-  createTextMessage,
+  createMessage,
   promptToMessages,
   extractTextFromMessages,
   formatMessagesForDisplay,
+  resolveUserFriendlyMessage,
+  formatErrorForLogging,
+  GroqError,
+  requestDeduplicator,
+  RequestDeduplicator,
+  requestQueue,
+  RequestQueue,
+  cacheManager,
+  CacheManager,
+  retryManager,
+  RetryManager,
+  withRetry,
+  debounceManager,
+  throttleManager,
+  debounce,
+  throttle,
 } from "./utils";
-
-export { getUserFriendlyError, formatErrorForLogging } from "./utils";
-
-export { GroqError } from "./utils";
+export type { GroqErrorMetadata, CacheOptions, CacheStats, QueueOptions, RetryOptions, DebounceOptions, ThrottleOptions } from "./utils";

@@ -11,67 +11,90 @@ import type {
 } from "../entities";
 
 /**
- * Text generation options
+ * Options for a single text or chat generation call.
  */
 export interface TextGenerationOptions {
-  /** Model to use */
+  /** Override the default model for this call. */
   readonly model?: string;
-  /** Generation configuration */
+  /** Sampling/limits configuration. */
   readonly generationConfig?: GroqGenerationConfig;
 }
 
 /**
- * Streaming callbacks
+ * Callbacks for streaming responses.
+ * - `onChunk` is called for each content fragment.
+ * - `onComplete` is called once the full text is available.
+ * - `onError` is called when the stream fails (the same error is also thrown).
  */
 export interface StreamingCallbacks {
-  /** Called for each chunk */
   readonly onChunk?: (chunk: string) => void;
-  /** Called on completion */
   readonly onComplete?: (fullText: string) => void;
-  /** Called on error */
   readonly onError?: (error: Error) => void;
 }
 
 /**
- * Structured text generation options
+ * Options for structured (JSON) generation.
+ * Pass a JSON Schema in `schema` to constrain the model's output.
  */
 export interface StructuredGenerationOptions {
-  /** Model to use */
   readonly model?: string;
-  /** Generation configuration */
   readonly generationConfig?: GroqGenerationConfig;
-  /** JSON schema for validation */
   readonly schema?: Record<string, unknown>;
 }
 
 /**
- * Chat completion service interface
+ * Contract for the high-level chat service.
  */
 export interface IGroqChatService {
-  /** Generate completion from prompt */
-  generateCompletion(prompt: string, options?: TextGenerationOptions): Promise<string>;
-  /** Generate completion from messages */
-  generateChatCompletion(messages: GroqMessage[], options?: TextGenerationOptions): Promise<string>;
-  /** Generate structured JSON output */
-  generateStructured<T>(prompt: string, options?: StructuredGenerationOptions): Promise<T>;
-  /** Stream completion */
+  /** Generate a completion from a single prompt string. */
+  generateCompletion(
+    prompt: string,
+    options?: TextGenerationOptions,
+  ): Promise<string>;
+
+  /** Generate a completion from a message history. */
+  generateChatCompletion(
+    messages: ReadonlyArray<GroqMessage>,
+    options?: TextGenerationOptions,
+  ): Promise<string>;
+
+  /** Generate and parse a JSON output matching the optional schema. */
+  generateStructured<T>(
+    prompt: string,
+    options?: StructuredGenerationOptions,
+  ): Promise<T>;
+
+  /** Stream a completion from a single prompt. Returns the full text. */
   streamCompletion(
     prompt: string,
     callbacks: StreamingCallbacks,
-    options?: TextGenerationOptions
-  ): Promise<void>;
+    options?: TextGenerationOptions,
+  ): Promise<string>;
+
+  /** Stream a chat completion from a message history. Returns full text. */
+  streamChatCompletion(
+    messages: ReadonlyArray<GroqMessage>,
+    callbacks: StreamingCallbacks,
+    options?: TextGenerationOptions,
+  ): Promise<string>;
+
+  /** Clear the in-memory response cache. */
+  clearCache(): void;
 }
 
 /**
- * HTTP client interface
+ * Contract for the low-level HTTP client.
+ * The strategy pipeline (retry / queue / dedupe) is wired around
+ * `postChatCompletion`; the streaming endpoint intentionally bypasses it
+ * because responses cannot be deduplicated.
  */
 export interface IGroqHttpClient {
-  /** Send chat completion request */
   postChatCompletion(request: GroqChatRequest): Promise<GroqChatResponse>;
-  /** Send streaming request */
-  streamChatCompletion(request: GroqChatRequest): Promise<ReadableStream>;
-  /** Get API key */
+  streamChatCompletion(request: GroqChatRequest): Promise<ReadableStream<Uint8Array>>;
   getApiKey(): string;
-  /** Set API key */
   setApiKey(apiKey: string): void;
+  initialize(config: Readonly<{ apiKey: string; baseUrl?: string; timeoutMs?: number; textModel?: string }>): void;
+  isInitialized(): boolean;
+  cancelPendingRequests(): void;
+  reset(): void;
 }
