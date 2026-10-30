@@ -1,10 +1,3 @@
-/**
- * Groq HTTP Transport
- * @description Low-level transport. Delegates:
- *              - error body parsing → extractors/response-error-message-extractor
- *              - status classification → validators/http-status-classifier
- */
-
 import type { GroqChatRequest, GroqChatResponse } from "../entities";
 import { GroqError, GroqErrorMetadata } from "../utils/groq-error";
 import { GroqErrorType } from "../constants/error-types";
@@ -15,6 +8,7 @@ import {
 } from "../extractors/response-error-message-extractor";
 import { HTTP_HEADERS, CHAT_COMPLETIONS_PATH } from "../constants/protocol.constants";
 import type { GroqConfigStore } from "./groq-config-store";
+import type { StreamRequestOptions } from "../interfaces";
 
 export class GroqHttpTransport {
   private readonly pendingAbortControllers = new Set<AbortController>();
@@ -35,13 +29,18 @@ export class GroqHttpTransport {
     });
   }
 
-  async streamChatCompletion(request: GroqChatRequest): Promise<ReadableStream<Uint8Array>> {
+  async streamChatCompletion(
+    request: GroqChatRequest,
+    options: StreamRequestOptions = {},
+  ): Promise<ReadableStream<Uint8Array>> {
     const config = this.configStore.get();
     const url = `${config.baseUrl}${CHAT_COMPLETIONS_PATH}`;
     const timeout = config.timeoutMs ?? TIMEOUTS.STREAMING;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
+    const onExternalAbort = (): void => controller.abort();
+    options.signal?.addEventListener("abort", onExternalAbort);
     this.pendingAbortControllers.add(controller);
 
     try {
@@ -60,6 +59,7 @@ export class GroqHttpTransport {
 
       return response.body;
     } catch (error) {
+      options.signal?.removeEventListener("abort", onExternalAbort);
       throw this.normalizeError(error);
     } finally {
       clearTimeout(timeoutId);

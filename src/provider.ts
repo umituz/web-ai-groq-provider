@@ -27,6 +27,7 @@ import { GroqHttpClient } from "./domains/groq/clients/groq-http-client";
 import { GroqHttpTransport } from "./domains/groq/clients/groq-http-transport";
 import { TextGenerationService } from "./domains/groq/services/text-generation.service";
 import { ChatService } from "./domains/chat/services/chat.service";
+import { CacheManager } from "./domains/groq/utils/cache-manager";
 
 export interface AppContainer {
   readonly groqHttpClient: GroqHttpClient;
@@ -48,7 +49,7 @@ export function configureProvider(config: GroqConfig): AppContainer {
   const httpClient = new GroqHttpClient({ configStore, transport });
   httpClient.initialize(config);
 
-  const textGeneration = new TextGenerationService(httpClient);
+  const textGeneration = new TextGenerationService(httpClient, new CacheManager(), config.textModel);
   const chat = new ChatService(textGeneration);
 
   container = { groqHttpClient: httpClient, textGeneration, chat };

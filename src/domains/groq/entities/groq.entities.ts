@@ -11,6 +11,8 @@ export interface GroqConfig {
   readonly textModel?: string;
 }
 
+export type GroqReasoningEffort = "low" | "medium" | "high";
+
 export interface GroqGenerationConfig {
   readonly temperature?: number;
   readonly maxTokens?: number;
@@ -19,6 +21,7 @@ export interface GroqGenerationConfig {
   readonly stop?: string[];
   readonly frequencyPenalty?: number;
   readonly presencePenalty?: number;
+  readonly reasoningEffort?: GroqReasoningEffort;
 }
 
 export type GroqMessageRole = "system" | "user" | "assistant";
@@ -38,6 +41,7 @@ export interface GroqChatRequest {
   readonly stop?: string[];
   readonly frequency_penalty?: number;
   readonly presence_penalty?: number;
+  readonly reasoning_effort?: GroqReasoningEffort;
   readonly stream?: boolean;
 }
 

@@ -8,6 +8,7 @@
 export type {
   GroqConfig,
   GroqGenerationConfig,
+  GroqReasoningEffort,
   GroqMessageRole,
   GroqMessage,
   GroqChatRequest,

@@ -1,20 +1,3 @@
-/**
- * SSE Line Extractor
- * @description Pure functions for parsing Server-Sent Events (SSE)
- *              lines as emitted by Groq's streaming endpoint. Handles
- *              prefix detection, done-marker detection, and JSON
- *              content extraction.
- *
- * @example
- * ```typescript
- * isSseDataLine("data: {...}"); // true
- * extractSseDataPayload("data: {...}"); // "{...}"
- * isSseDoneMarker("data: [DONE]"); // true
- * extractContentFromSsePayload('{"choices":[{"delta":{"content":"hi"}}]}');
- * // "hi"
- * ```
- */
-
 import { SSE_DONE_MARKER, SSE_PREFIX } from "../constants/protocol.constants";
 
 export interface SseChunkDelta {
@@ -53,10 +36,6 @@ export interface NormalizedSseChunk {
   readonly isDone: boolean;
 }
 
-/**
- * Normalize a raw chunk into one or more `NormalizedSseChunk`s,
- * filtering out non-data lines and done markers.
- */
 export function normalizeSseChunk(rawChunk: string): ReadonlyArray<NormalizedSseChunk> {
   const lines = splitSseLines(rawChunk);
   const result: NormalizedSseChunk[] = [];

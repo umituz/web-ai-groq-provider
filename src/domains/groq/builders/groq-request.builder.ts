@@ -5,7 +5,7 @@
  *              Implements the Builder pattern; each method is fluent.
  */
 
-import type { GroqChatRequest, GroqMessage, GroqGenerationConfig } from "../entities";
+import type { GroqChatRequest, GroqMessage, GroqGenerationConfig, GroqReasoningEffort } from "../entities";
 import { DEFAULT_GENERATION_CONFIG } from "../constants/groq.constants";
 
 interface MutableRequest {
@@ -18,6 +18,7 @@ interface MutableRequest {
   stop?: string[];
   frequency_penalty?: number;
   presence_penalty?: number;
+  reasoning_effort?: GroqReasoningEffort;
   stream?: boolean;
 }
 
@@ -64,6 +65,7 @@ export class GroqChatRequestBuilder {
     if (cfg.stop !== undefined) request.stop = cfg.stop;
     if (cfg.frequencyPenalty !== undefined) request.frequency_penalty = cfg.frequencyPenalty;
     if (cfg.presencePenalty !== undefined) request.presence_penalty = cfg.presencePenalty;
+    if (cfg.reasoningEffort !== undefined) request.reasoning_effort = cfg.reasoningEffort;
     if (this.streamEnabled) request.stream = true;
 
     return request as GroqChatRequest;

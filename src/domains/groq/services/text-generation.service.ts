@@ -1,15 +1,3 @@
-/**
- * Text Generation Service
- * @description High-level text generation orchestrator. Coordinates:
- *              - cache lookup/store
- *              - request building
- *              - HTTP transport
- *              - response parsing (text / structured / streaming)
- *
- *              No longer owns prompt construction (delegated to builder)
- *              or JSON parsing (delegated to JsonResponseParser).
- */
-
 import type {
   TextGenerationOptions,
   StreamingCallbacks,
@@ -38,13 +26,14 @@ export class TextGenerationService implements IGroqChatService {
   constructor(
     private readonly httpClient: IGroqHttpClient,
     private readonly cache: CacheManager = new CacheManager(),
+    private readonly defaultModel: string = DEFAULT_MODELS.TEXT,
   ) {}
 
   generateCompletion(
     prompt: string,
     options: TextGenerationOptions = {},
   ): Promise<string> {
-    const model = options.model ?? DEFAULT_MODELS.TEXT;
+    const model = options.model ?? this.defaultModel;
 
     return this.executeWithCache(
       {
@@ -68,7 +57,7 @@ export class TextGenerationService implements IGroqChatService {
     messages: ReadonlyArray<GroqMessage>,
     options: TextGenerationOptions = {},
   ): Promise<string> {
-    const model = options.model ?? DEFAULT_MODELS.TEXT;
+    const model = options.model ?? this.defaultModel;
 
     return this.executeWithCache(
       {
@@ -92,7 +81,7 @@ export class TextGenerationService implements IGroqChatService {
     prompt: string,
     options: StructuredGenerationOptions = {},
   ): Promise<T> {
-    const model = options.model ?? DEFAULT_MODELS.TEXT;
+    const model = options.model ?? this.defaultModel;
     const jsonPrompt = StructuredPromptBuilder.for(prompt)
       .withSchema(options.schema)
       .build();
@@ -119,21 +108,12 @@ export class TextGenerationService implements IGroqChatService {
     return this.streamChatCompletion([createUserMessage(prompt)], callbacks, options);
   }
 
-  /**
-   * Stream a chat completion given an existing message history.
-   * Resolves with the accumulated full text once the stream completes.
-   *
-   * @param messages - The full conversation history.
-   * @param callbacks - Streaming callbacks (`onChunk`, `onComplete`, `onError`).
-   * @param options - Generation options.
-   * @returns The full accumulated text.
-   */
   async streamChatCompletion(
     messages: ReadonlyArray<GroqMessage>,
     callbacks: StreamingCallbacks,
     options: TextGenerationOptions = {},
   ): Promise<string> {
-    const model = options.model ?? DEFAULT_MODELS.TEXT;
+    const model = options.model ?? this.defaultModel;
     const request = GroqChatRequestBuilder.for(model)
       .withMessages(messages)
       .withConfig(options.generationConfig)
@@ -145,7 +125,9 @@ export class TextGenerationService implements IGroqChatService {
     });
 
     try {
-      const stream = await this.httpClient.streamChatCompletion(request);
+      const stream = await this.httpClient.streamChatCompletion(request, {
+        signal: options.signal,
+      });
       const fullText = await parser.parse(stream);
       callbacks.onComplete?.(fullText);
       return fullText;
@@ -156,9 +138,6 @@ export class TextGenerationService implements IGroqChatService {
     }
   }
 
-  /**
-   * Clear the response cache (used by long-running services to free memory).
-   */
   clearCache(): void {
     this.cache.clear();
   }

@@ -1,11 +1,5 @@
-/**
- * Groq HTTP Client
- * @description Facade that wires the transport together with the
- *              request executor strategies (retry, queue, deduplication).
- */
-
 import type { GroqChatRequest, GroqChatResponse, GroqConfig } from "../entities";
-import type { IGroqHttpClient } from "../interfaces";
+import type { IGroqHttpClient, StreamRequestOptions } from "../interfaces";
 import type { IRequestExecutor } from "../strategies/request-executor.strategy";
 import { GroqConfigStore } from "./groq-config-store";
 import { GroqHttpTransport } from "./groq-http-transport";
@@ -80,8 +74,11 @@ export class GroqHttpClient implements IGroqHttpClient {
     );
   }
 
-  streamChatCompletion(request: GroqChatRequest): Promise<ReadableStream<Uint8Array>> {
-    return this.transport.streamChatCompletion(request);
+  streamChatCompletion(
+    request: GroqChatRequest,
+    options?: StreamRequestOptions,
+  ): Promise<ReadableStream<Uint8Array>> {
+    return this.transport.streamChatCompletion(request, options);
   }
 
   reset(): void {

@@ -1,6 +1,6 @@
 {
   "name": "@umituz/web-ai-groq-provider",
-  "version": "2.0.0",
+  "version": "2.2.1",
   "description": "Groq AI text generation and chat provider for React web applications",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -30,6 +30,7 @@
     "lint": "eslint .",
     "build": "tsup",
     "dev": "tsup --watch",
+    "test": "vitest run",
     "test:scenarios": "echo 'See TEST_SCENARIOS.md for manual test scenarios'",
     "version:patch": "npm version patch -m 'chore: release v%s'",
     "version:minor": "npm version minor -m 'chore: release v%s'",
@@ -62,7 +63,8 @@
     "react": "18.3.1",
     "tsup": "^8.0.0",
     "typescript": "~5.9.2",
-    "typescript-eslint": "^8.38.0"
+    "typescript-eslint": "^8.38.0",
+    "vitest": "^3.2.7"
   },
   "publishConfig": {
     "access": "public"
