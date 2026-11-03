@@ -32,7 +32,8 @@ export type {
 
 // Services
 export { TextGenerationService, GroqHttpClient, GroqHttpTransport, GroqConfigStore } from "./services";
-export type { GroqHttpClientDeps } from "./services";
+export { SSE_BRIDGE_EVENTS, createSseResponse, requestStructuredJson } from "./services";
+export type { GroqHttpClientDeps, SseResponseOptions, StructuredJsonRequest } from "./services";
 
 // Hooks
 export { useGroq, useCacheStats } from "./hooks";
@@ -91,5 +92,11 @@ export {
   throttleManager,
   debounce,
   throttle,
+  asRecord,
+  asStringArray,
+  asObjectArray,
+  asTrimmedOptionalString,
+  clampScore,
+  oneOfCatalog,
 } from "./utils";
 export type { GroqErrorMetadata, CacheOptions, CacheStats, QueueOptions, RetryOptions, DebounceOptions, ThrottleOptions } from "./utils";

@@ -1,0 +1,123 @@
+import { describe, expect, it } from "vitest";
+import { createSseResponse } from "../src/domains/groq/services/sse-response.service";
+
+function streamFromChunks(chunks: string[]): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  let index = 0;
+  return new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (index >= chunks.length) {
+        controller.close();
+        return;
+      }
+      controller.enqueue(encoder.encode(chunks[index]));
+      index += 1;
+    },
+  });
+}
+
+function deltaPayload(content: string): string {
+  return JSON.stringify({ choices: [{ delta: { content } }] });
+}
+
+function streamFailingAfter(chunks: string[]): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  let index = 0;
+  return new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (index >= chunks.length) {
+        controller.error(new Error("upstream broke"));
+        return;
+      }
+      controller.enqueue(encoder.encode(chunks[index]));
+      index += 1;
+    },
+  });
+}
+
+async function readFrames(response: Response): Promise<string[]> {
+  const text = await response.text();
+  return text.split("\n\n").filter((frame) => frame.length > 0);
+}
+
+describe("createSseResponse", () => {
+  it("emits delta frames and a done frame with the done payload", async () => {
+    const response = createSseResponse(
+      streamFromChunks([
+        `data: ${deltaPayload("Hel")}\n\n`,
+        `data: ${deltaPayload("lo")}\n\ndata: [DONE]\n\n`,
+      ]),
+      { donePayload: { remaining: 7 }, errorCode: () => "ai.error" },
+    );
+    const frames = await readFrames(response);
+    expect(frames).toEqual([
+      `event: delta\ndata: ${JSON.stringify({ text: "Hel" })}`,
+      `event: delta\ndata: ${JSON.stringify({ text: "lo" })}`,
+      `event: done\ndata: ${JSON.stringify({ remaining: 7 })}`,
+    ]);
+    expect(response.headers.get("content-type")).toBe(
+      "text/event-stream; charset=utf-8",
+    );
+  });
+
+  it("flushes a trailing buffered data line without a newline", async () => {
+    const response = createSseResponse(
+      streamFromChunks([`data: ${deltaPayload("tail")}`]),
+      { donePayload: {}, errorCode: () => "ai.error" },
+    );
+    const frames = await readFrames(response);
+    expect(frames).toEqual([
+      `event: delta\ndata: ${JSON.stringify({ text: "tail" })}`,
+      `event: done\ndata: {}`,
+    ]);
+  });
+
+  it("calls onStreamFailure and emits an error frame when nothing was delivered", async () => {
+    const failures: unknown[] = [];
+    const response = createSseResponse(streamFailingAfter([]), {
+      donePayload: {},
+      errorCode: () => "ai.error",
+      onStreamFailure: (err) => {
+        failures.push(err);
+      },
+    });
+    const frames = await readFrames(response);
+    expect(frames).toEqual([
+      `event: error\ndata: ${JSON.stringify({ code: "ai.error" })}`,
+    ]);
+    expect(failures).toHaveLength(1);
+  });
+
+  it("skips onStreamFailure when a delta was already delivered", async () => {
+    const failures: unknown[] = [];
+    const response = createSseResponse(
+      streamFailingAfter([`data: ${deltaPayload("partial")}\n\n`]),
+      {
+        donePayload: {},
+        errorCode: () => "ai.error",
+        onStreamFailure: (err) => {
+          failures.push(err);
+        },
+      },
+    );
+    const frames = await readFrames(response);
+    expect(frames).toEqual([
+      `event: delta\ndata: ${JSON.stringify({ text: "partial" })}`,
+      `event: error\ndata: ${JSON.stringify({ code: "ai.error" })}`,
+    ]);
+    expect(failures).toHaveLength(0);
+  });
+
+  it("ignores non-data lines and payloads without content", async () => {
+    const response = createSseResponse(
+      streamFromChunks([
+        `event: ping\ndata: {}\n\ndata: {"choices":[{"delta":{}}]}\n\ndata: [DONE]\n\n`,
+      ]),
+      { donePayload: { ok: true }, errorCode: () => "ai.error" },
+    );
+    const frames = await readFrames(response);
+    expect(frames).toEqual([
+      `event: done\ndata: ${JSON.stringify({ ok: true })}`,
+    ]);
+  });
+});

@@ -37,3 +37,12 @@ export {
   throttle,
 } from "./debounce";
 export type { DebounceOptions, ThrottleOptions } from "./debounce";
+
+export {
+  asRecord,
+  asStringArray,
+  asObjectArray,
+  asTrimmedOptionalString,
+  clampScore,
+  oneOfCatalog,
+} from "./coercion.util";

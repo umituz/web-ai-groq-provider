@@ -42,6 +42,7 @@ export interface GroqChatRequest {
   readonly frequency_penalty?: number;
   readonly presence_penalty?: number;
   readonly reasoning_effort?: GroqReasoningEffort;
+  readonly response_format?: { readonly type: "json_object" };
   readonly stream?: boolean;
 }
 
