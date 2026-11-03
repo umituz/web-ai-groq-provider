@@ -10,14 +10,12 @@ export function asStringArray(value: unknown, max: number): string[] {
     .slice(0, max);
 }
 
-export function asObjectArray(value: unknown, max: number): Record<string, unknown>[] {
+export function asObjectArray(value: unknown): Record<string, unknown>[] {
   if (!Array.isArray(value)) return [];
-  return value
-    .filter(
-      (entry): entry is Record<string, unknown> =>
-        typeof entry === "object" && entry !== null && !Array.isArray(entry),
-    )
-    .slice(0, max);
+  return value.filter(
+    (entry): entry is Record<string, unknown> =>
+      typeof entry === "object" && entry !== null && !Array.isArray(entry),
+  );
 }
 
 export function asTrimmedOptionalString(value: unknown): string | undefined {

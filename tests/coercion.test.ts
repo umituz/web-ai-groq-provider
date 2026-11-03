@@ -31,8 +31,8 @@ describe("asStringArray", () => {
 });
 
 describe("asObjectArray", () => {
-  it("keeps only object entries and slices to max", () => {
-    expect(asObjectArray([{ a: 1 }, "nope", null, [3], { b: 2 }, { c: 3 }], 2)).toEqual([
+  it("keeps only object entries", () => {
+    expect(asObjectArray([{ a: 1 }, "nope", null, [3], { b: 2 }])).toEqual([
       { a: 1 },
       { b: 2 },
     ]);
