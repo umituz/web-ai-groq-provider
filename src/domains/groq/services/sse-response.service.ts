@@ -18,7 +18,7 @@ export interface SseResponseOptions {
 }
 
 export function createSseResponse(
-  upstream: ReadableStream<Uint8Array>,
+  openUpstream: () => Promise<ReadableStream<Uint8Array>>,
   options: SseResponseOptions,
 ): Response {
   const encoder = new TextEncoder();
@@ -59,6 +59,7 @@ export function createSseResponse(
         return false;
       };
       try {
+        const upstream = await openUpstream();
         const reader = upstream.getReader();
         let buffer = "";
         let finished = false;

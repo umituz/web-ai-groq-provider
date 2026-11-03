@@ -43,10 +43,10 @@ async function readFrames(response: Response): Promise<string[]> {
 describe("createSseResponse", () => {
   it("emits delta frames and a done frame with the done payload", async () => {
     const response = createSseResponse(
-      streamFromChunks([
+      () => Promise.resolve(streamFromChunks([
         `data: ${deltaPayload("Hel")}\n\n`,
         `data: ${deltaPayload("lo")}\n\ndata: [DONE]\n\n`,
-      ]),
+      ])),
       { donePayload: { remaining: 7 }, errorCode: () => "ai.error" },
     );
     const frames = await readFrames(response);
@@ -62,7 +62,7 @@ describe("createSseResponse", () => {
 
   it("flushes a trailing buffered data line without a newline", async () => {
     const response = createSseResponse(
-      streamFromChunks([`data: ${deltaPayload("tail")}`]),
+      () => Promise.resolve(streamFromChunks([`data: ${deltaPayload("tail")}`])),
       { donePayload: {}, errorCode: () => "ai.error" },
     );
     const frames = await readFrames(response);
@@ -74,7 +74,7 @@ describe("createSseResponse", () => {
 
   it("calls onStreamFailure and emits an error frame when nothing was delivered", async () => {
     const failures: unknown[] = [];
-    const response = createSseResponse(streamFailingAfter([]), {
+    const response = createSseResponse(() => Promise.resolve(streamFailingAfter([])), {
       donePayload: {},
       errorCode: () => "ai.error",
       onStreamFailure: (err) => {
@@ -91,7 +91,7 @@ describe("createSseResponse", () => {
   it("skips onStreamFailure when a delta was already delivered", async () => {
     const failures: unknown[] = [];
     const response = createSseResponse(
-      streamFailingAfter([`data: ${deltaPayload("partial")}\n\n`]),
+      () => Promise.resolve(streamFailingAfter([`data: ${deltaPayload("partial")}\n\n`])),
       {
         donePayload: {},
         errorCode: () => "ai.error",
@@ -110,14 +110,33 @@ describe("createSseResponse", () => {
 
   it("ignores non-data lines and payloads without content", async () => {
     const response = createSseResponse(
-      streamFromChunks([
+      () => Promise.resolve(streamFromChunks([
         `event: ping\ndata: {}\n\ndata: {"choices":[{"delta":{}}]}\n\ndata: [DONE]\n\n`,
-      ]),
+      ])),
       { donePayload: { ok: true }, errorCode: () => "ai.error" },
     );
     const frames = await readFrames(response);
     expect(frames).toEqual([
       `event: done\ndata: ${JSON.stringify({ ok: true })}`,
     ]);
+  });
+
+  it("emits an error frame when opening the upstream rejects", async () => {
+    const failures: unknown[] = [];
+    const response = createSseResponse(
+      () => Promise.reject(new Error("rate limited")),
+      {
+        donePayload: {},
+        errorCode: () => "ai.rateLimit",
+        onStreamFailure: (err) => {
+          failures.push(err);
+        },
+      },
+    );
+    const frames = await readFrames(response);
+    expect(frames).toEqual([
+      `event: error\ndata: ${JSON.stringify({ code: "ai.rateLimit" })}`,
+    ]);
+    expect(failures).toHaveLength(1);
   });
 });
