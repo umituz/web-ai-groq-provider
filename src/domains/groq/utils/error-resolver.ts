@@ -1,8 +1,3 @@
-/**
- * Error Resolver
- * @description Resolves any thrown value to a user-friendly message.
- *              Delegates the actual classification → resolvers/user-friendly-error-resolver.
- */
 
 import { resolveUserFriendlyErrorMessage } from "../resolvers/user-friendly-error-resolver";
 import { GroqError } from "./groq-error";

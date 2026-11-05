@@ -1,17 +1,3 @@
-/**
- * Error Classifier
- * @description Pure functions: classify a GroqErrorType into actionable
- *              categories (retryable, auth-related, etc.).
- *              No hardcoded error types in the call sites; the sets
- *              are explicit and configurable.
- *
- * @example
- * ```typescript
- * isRetryableErrorType(GroqErrorType.RATE_LIMIT_ERROR); // true
- * isRetryableErrorType(GroqErrorType.INVALID_API_KEY);   // false
- * isAuthErrorType(GroqErrorType.INVALID_API_KEY);        // true
- * ```
- */
 
 import { GroqErrorType } from "../constants/error-types";
 

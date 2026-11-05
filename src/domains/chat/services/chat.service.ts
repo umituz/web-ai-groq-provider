@@ -1,14 +1,3 @@
-/**
- * Chat Service
- * @description Core chat logic. Composes:
- *              - text generation (from groq domain)
- *              - message formatting
- *              - system prompt resolution (via injected strategy)
- *
- *              Does NOT hardcode any language or fallback content.
- *              Errors propagate to the caller; the consumer decides
- *              how to render a user-friendly message.
- */
 
 import type {
   IChatService,
@@ -79,10 +68,6 @@ export class ChatService implements IChatService {
   }
 
   async getConversations(): Promise<ChatConversation[]> {
-    // Single-conversation view; multi-conversation aggregation is the
-    // responsibility of the host application's storage implementation.
-    // Returning an empty list avoids the false impression that we
-    // have a fully featured conversation registry.
     return [];
   }
 
@@ -131,14 +116,6 @@ export class ChatService implements IChatService {
     };
   }
 
-  /**
-   * Generate a streaming AI response. Emits content chunks via the
-   * `onChunk` callback. Resolves once the stream completes.
-   *
-   * @param userMessage - The latest user message.
-   * @param context - The message history to send as context.
-   * @param onChunk - Called for each content chunk.
-   */
   async generateStreamingResponse(
     userMessage: string,
     context: ReadonlyArray<ChatMessage>,
@@ -174,13 +151,6 @@ export class ChatService implements IChatService {
   }
 }
 
-/**
- * Helper to extract a `ChatTokenUsage` from a ChatMessage's metadata,
- * if the model used reported it.
- *
- * @param message - The chat message to inspect.
- * @returns The token usage, or `null` when not present.
- */
 export function extractTokenUsage(message: ChatMessage): ChatTokenUsage | null {
   const meta = message.metadata;
   if (!meta) return null;

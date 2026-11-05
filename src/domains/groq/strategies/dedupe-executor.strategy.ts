@@ -1,7 +1,3 @@
-/**
- * Dedupe Executor Strategy
- * @description Coalesces in-flight requests with the same key
- */
 
 import type { IRequestExecutor } from "./request-executor.strategy";
 import type { RequestDeduplicator } from "../utils/request-deduplicator.util";

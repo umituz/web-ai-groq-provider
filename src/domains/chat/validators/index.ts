@@ -1,6 +1,3 @@
-/**
- * Chat Validators Index
- */
 
 export {
   isMeaningfulMessageContent,

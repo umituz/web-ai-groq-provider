@@ -1,6 +1,3 @@
-/**
- * Groq Validators Index
- */
 
 export {
   isValidApiKey,

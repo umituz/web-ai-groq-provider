@@ -1,7 +1,3 @@
-/**
- * Groq Error
- * @description Custom error class for Groq API operations.
- */
 
 import { GroqErrorType } from "../constants/error-types";
 

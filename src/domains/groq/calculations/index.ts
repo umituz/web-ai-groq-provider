@@ -1,8 +1,3 @@
-/**
- * Calculations Index
- * @description Pure mathematical and timing functions.
- *              No I/O, no side effects, no hardcoded values.
- */
 
 export { selectLeastRecentlyUsedKey } from "./lru-key-selector";
 export type { AccessTimestamped } from "./lru-key-selector";

@@ -1,25 +1,9 @@
-/**
- * useCacheStats Hook
- * @description React hook that exposes dynamic, real-time statistics
- *              of the active CacheManager. The numbers are computed
- *              on every interval tick — no value is hardcoded.
- *
- * @example
- * ```tsx
- * function CacheDebug() {
- *   const stats = useCacheStats({ pollIntervalMs: 2000 });
- *   return <pre>{JSON.stringify(stats, null, 2)}</pre>;
- * }
- * ```
- */
 
 import { useEffect, useState } from "react";
 import type { CacheManager, CacheStats } from "../utils/cache-manager";
 
 export interface UseCacheStatsOptions {
-  /** Polling interval in milliseconds. Default 1000. */
   readonly pollIntervalMs?: number;
-  /** When false, polling is paused and the last snapshot is returned. */
   readonly enabled?: boolean;
 }
 

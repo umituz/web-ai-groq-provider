@@ -1,6 +1,3 @@
-/**
- * Groq Domain Entities Index
- */
 
 export type {
   GroqConfig,

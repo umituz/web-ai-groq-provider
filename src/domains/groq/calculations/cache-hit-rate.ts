@@ -1,20 +1,3 @@
-/**
- * Cache Hit Rate Calculator
- * @description Pure function: computes the average access count
- *              per cache entry, used to surface cache effectiveness
- *              in dynamic statistics displays.
- *
- * @example
- * ```typescript
- * calculateCacheHitRate([
- *   { accessCount: 5 },
- *   { accessCount: 3 },
- *   { accessCount: 0 },
- * ]); // 2.67
- *
- * calculateCacheHitRate([]); // 0
- * ```
- */
 
 export interface AccessCounted {
   readonly accessCount: number;

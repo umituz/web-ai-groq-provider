@@ -1,7 +1,3 @@
-/**
- * Request Deduplicator Utility
- * @description Prevents duplicate in-flight API calls for the same request
- */
 
 interface PendingRequest<T> {
   readonly promise: Promise<T>;

@@ -1,6 +1,3 @@
-/**
- * Request Executor Strategies Index
- */
 
 export type { IRequestExecutor } from "./request-executor.strategy";
 export { RetryExecutor } from "./retry-executor.strategy";

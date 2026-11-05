@@ -1,10 +1,4 @@
-/**
- * Groq Domain
- * @description Groq API client, text generation, and supporting infrastructure.
- *              Subpath: @umituz/web-ai-groq-provider/groq
- */
 
-// Entities
 export type {
   GroqConfig,
   GroqGenerationConfig,
@@ -21,7 +15,6 @@ export type {
   GroqErrorResponse,
 } from "./entities";
 
-// Interfaces
 export type {
   TextGenerationOptions,
   StreamingCallbacks,
@@ -30,16 +23,13 @@ export type {
   IGroqHttpClient,
 } from "./interfaces";
 
-// Services
 export { TextGenerationService, GroqHttpClient, GroqHttpTransport, GroqConfigStore } from "./services";
 export { SSE_BRIDGE_EVENTS, createSseResponse, requestStructuredJson } from "./services";
 export type { GroqHttpClientDeps, SseResponseOptions, StructuredJsonRequest } from "./services";
 
-// Hooks
 export { useGroq, useCacheStats } from "./hooks";
 export type { UseGroqOptions, UseGroqReturn, UseGroqDeps, UseCacheStatsOptions } from "./hooks";
 
-// Constants
 export {
   GROQ_MODELS,
   DEFAULT_MODELS,
@@ -51,14 +41,11 @@ export {
   USER_FRIENDLY_ERROR_MESSAGES,
 } from "./constants";
 
-// Builders
 export { GroqChatRequestBuilder, StructuredPromptBuilder } from "./builders";
 
-// Parsers
 export { StreamingResponseParser, JsonResponseParser } from "./parsers";
 export type { StreamingParserCallbacks } from "./parsers";
 
-// Strategies
 export {
   RetryExecutor,
   QueueExecutor,
@@ -67,7 +54,6 @@ export {
 } from "./strategies";
 export type { IRequestExecutor, DedupeExecutorOptions } from "./strategies";
 
-// Utils
 export {
   createUserMessage,
   createAssistantMessage,

@@ -1,19 +1,5 @@
-/**
- * API Key Validator
- * @description Pure function: validates a Groq API key by length and
- *              non-emptiness. No I/O, no hardcoded values.
- *
- * @example
- * ```typescript
- * isValidApiKey("gsk_abcdefghijklmnop"); // true
- * isValidApiKey("short");               // false
- * isValidApiKey("");                    // false
- * isValidApiKey(undefined);             // false
- * ```
- */
 
 export interface ApiKeyValidationRule {
-  /** Minimum accepted length after trimming whitespace. */
   readonly minLength: number;
 }
 

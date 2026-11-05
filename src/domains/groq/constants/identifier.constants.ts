@@ -1,7 +1,3 @@
-/**
- * Identifier Constants
- * @description Prefixes and identifiers used across the package
- */
 
 export const MESSAGE_ID_PREFIX = "msg-" as const;
 export const CHAT_MESSAGE_ID_SUFFIX_LENGTH = 9;

@@ -1,13 +1,3 @@
-/**
- * Composite Executor Strategy
- * @description Chains multiple IRequestExecutor instances.
- *              Order matters: the OUTERMOST executor wraps the others.
- *              Execution flows top-to-bottom on the way in,
- *              bottom-to-top on the way out.
- *
- * Example with [Dedupe, Retry, Queue]:
- *   Dedupe -> Retry -> Queue -> fn
- */
 
 import type { IRequestExecutor } from "./request-executor.strategy";
 

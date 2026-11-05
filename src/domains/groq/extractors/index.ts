@@ -1,6 +1,3 @@
-/**
- * Extractors Index
- */
 
 export {
   extractErrorMessageFromJsonBody,

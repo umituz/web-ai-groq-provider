@@ -1,7 +1,3 @@
-/**
- * Message Factory and Transformer
- * @description Builders and converters for Groq messages
- */
 
 import type { GroqMessage, GroqMessageRole } from "../entities";
 

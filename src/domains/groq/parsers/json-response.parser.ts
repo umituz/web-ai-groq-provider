@@ -1,7 +1,3 @@
-/**
- * JSON Response Parser
- * @description Parses JSON payloads extracted by parsers/json-content-extractor.
- */
 
 import { GroqError } from "../utils/groq-error";
 import { GroqErrorType } from "../constants/error-types";

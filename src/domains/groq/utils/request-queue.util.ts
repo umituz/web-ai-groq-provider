@@ -1,7 +1,3 @@
-/**
- * Request Queue Manager Utility
- * @description Manages concurrent requests with priority and limits
- */
 
 interface QueuedRequest<T> {
   readonly id: string;

@@ -1,9 +1,3 @@
-/**
- * Groq Request Builder
- * @description Builder for constructing GroqChatRequest instances
- *              from a domain intent (model + messages + generation config).
- *              Implements the Builder pattern; each method is fluent.
- */
 
 import type { GroqChatRequest, GroqMessage, GroqGenerationConfig, GroqReasoningEffort } from "../entities";
 import { DEFAULT_GENERATION_CONFIG } from "../constants/groq.constants";

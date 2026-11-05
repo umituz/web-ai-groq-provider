@@ -1,24 +1,3 @@
-/**
- * useGroq Hook
- * @description React hook for Groq text generation.
- *              Each component instance owns its own AbortController
- *              so unmounting one component does NOT cancel requests
- *              issued by other consumers. Use `cancel()` to abort
- *              an in-flight request from the same component.
- *
- * @example
- * ```tsx
- * import { useGroq, getProvider } from "@umituz/web-ai-groq-provider";
- *
- * function MyComponent() {
- *   const { generate, isLoading, error, result, cancel } = useGroq(
- *     { model: "llama-3.3-70b-versatile" },
- *     { textGeneration: getProvider()!.textGeneration },
- *   );
- *   // ...
- * }
- * ```
- */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { GroqGenerationConfig } from "../entities";
@@ -38,24 +17,18 @@ export interface UseGroqReturn {
   readonly isLoading: boolean;
   readonly error: string | null;
   readonly result: string | null;
-  /** Generate a completion from a single prompt. */
   generate: (prompt: string, options?: GroqGenerationConfig) => Promise<string | null>;
-  /** Generate a structured JSON completion. */
   generateJSON: <T = Record<string, unknown>>(
     prompt: string,
     options?: GroqGenerationConfig & { schema?: Record<string, unknown> },
   ) => Promise<T | null>;
-  /** Stream a completion. Returns the full text. */
   stream: (
     prompt: string,
     onChunk: (chunk: string) => void,
     options?: GroqGenerationConfig,
   ) => Promise<string | null>;
-  /** Cancel any in-flight request issued by this hook instance. */
   cancel: () => void;
-  /** Reset the hook state to its initial values. Does not clear the cache. */
   reset: () => void;
-  /** Clear the error state. */
   clearError: () => void;
 }
 
@@ -83,7 +56,6 @@ export function useGroq(
   const optionsRef = useRef(options);
   optionsRef.current = options;
 
-  // Component-scoped abort controller: only this component's requests are cancelled.
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const stableConfig = useMemo(
@@ -112,7 +84,6 @@ export function useGroq(
     async <T>(task: (signal: AbortSignal) => Promise<T>): Promise<T | null> => {
       const controller = abortControllerRef.current;
       if (!controller) {
-        // Already unmounted.
         return null;
       }
       const { signal } = controller;
@@ -128,7 +99,6 @@ export function useGroq(
         return value;
       } catch (err) {
         if (signal.aborted) {
-          // Caller chose to cancel; suppress error propagation.
           return null;
         }
         const message = resolveUserFriendlyMessage(err);

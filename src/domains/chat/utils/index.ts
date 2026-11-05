@@ -1,6 +1,3 @@
-/**
- * Chat Utils Index
- */
 
 export { messageFormatter, MessageFormatter } from "./message-formatter";
 export { chatIdGenerator, ChatIdGenerator } from "./chat-id-generator";

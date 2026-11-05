@@ -1,13 +1,3 @@
-/**
- * Retry Executor Strategy
- * @description Wraps a request function with retry logic.
- *
- * @example
- * ```typescript
- * const executor = new RetryExecutor(retryManager, { maxAttempts: 5 });
- * await executor.execute(unreliableRequest, payload);
- * ```
- */
 
 import type { IRequestExecutor } from "./request-executor.strategy";
 import { RetryManager, RetryOptions } from "../utils/retry";

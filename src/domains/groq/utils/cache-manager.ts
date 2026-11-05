@@ -1,10 +1,3 @@
-/**
- * Cache Manager
- * @description LRU cache for API responses with TTL. Delegates:
- *              - LRU key selection → calculations/lru-key-selector
- *              - Cache key construction → builders/cache-key-builder
- *              - Hit rate calculation → calculations/cache-hit-rate
- */
 
 import { selectLeastRecentlyUsedKey } from "../calculations/lru-key-selector";
 import { calculateCacheHitRate } from "../calculations/cache-hit-rate";
@@ -18,9 +11,7 @@ interface CacheEntry<T> {
 }
 
 export interface CacheOptions {
-  /** Maximum number of entries. Default 100. */
   readonly maxSize?: number;
-  /** Time-to-live in milliseconds. Default 5 minutes. */
   readonly ttl?: number;
 }
 
@@ -75,15 +66,10 @@ export class CacheManager {
     this.cache.clear();
   }
 
-  /** Build a stable cache key from a parameter object. */
   generateKey(params: Readonly<Record<string, unknown>>): string {
     return buildCacheKey(params);
   }
 
-  /**
-   * Dynamic cache statistics. All numbers are computed at call time
-   * from the current state; nothing is hardcoded.
-   */
   getStats(): CacheStats {
     const now = Date.now();
     const entries = Array.from(this.cache.entries()).map(([key, entry]) => ({

@@ -1,8 +1,3 @@
-/**
- * Groq Domain Entities
- * @description Core type definitions for the Groq AI provider.
- *              Readonly everywhere: consumers must not mutate in-flight.
- */
 
 export interface GroqConfig {
   readonly apiKey: string;

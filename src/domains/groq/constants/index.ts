@@ -1,6 +1,3 @@
-/**
- * Groq Constants Index
- */
 
 export {
   GROQ_MODELS,
@@ -42,8 +39,6 @@ export {
   DEFAULT_RETRY_JITTER_FACTOR,
 } from "./identifier.constants";
 
-// Re-exports of classification helpers, kept for backward-compatible
-// import paths. The canonical locations are validators/ and resolvers/.
 export {
   classifyHttpStatus,
   DEFAULT_HTTP_STATUS_RULE,

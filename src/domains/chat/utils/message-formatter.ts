@@ -1,9 +1,3 @@
-/**
- * Message Formatter
- * @description Converts between ChatMessage (domain) and GroqMessage (transport).
- *              Does NOT include any prompts or fallback content; those are
- *              injected by the consumer (see prompt-strategy.ts).
- */
 
 import type { IMessageFormatter } from "../interfaces";
 import type { ChatMessage } from "../entities";

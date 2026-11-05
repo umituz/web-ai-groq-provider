@@ -1,6 +1,3 @@
-/**
- * Chat Entities Index
- */
 
 export type {
   ChatMessageSender,

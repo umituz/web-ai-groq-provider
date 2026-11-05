@@ -1,6 +1,3 @@
-/**
- * Infrastructure Utils Index
- */
 
 export {
   createUserMessage,

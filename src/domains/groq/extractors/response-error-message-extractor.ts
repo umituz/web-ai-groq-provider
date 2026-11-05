@@ -1,15 +1,3 @@
-/**
- * Response Error Message Extractor
- * @description Extracts the user-facing error message from a Groq
- *              error response body. Returns a sensible fallback
- *              when the body is missing or not JSON.
- *
- * @example
- * ```typescript
- * const msg = await extractErrorMessageFromResponse(response);
- * // "Rate limit exceeded" or "HTTP 429: Too Many Requests"
- * ```
- */
 
 import { GroqErrorType } from "../constants/error-types";
 
@@ -34,20 +22,12 @@ export function buildHttpStatusFallback(status: number, statusText: string): str
 }
 
 export async function extractErrorMessageFromResponse(response: Response): Promise<string> {
-  try {
-    const body = (await response.json()) as unknown;
-    const fromBody = extractErrorMessageFromJsonBody(body);
-    if (fromBody) return fromBody;
-  } catch {
-    // Body wasn't JSON; fall through.
-  }
+  const body: unknown = await response.json().catch(() => null);
+  const fromBody = extractErrorMessageFromJsonBody(body);
+  if (fromBody) return fromBody;
   return buildHttpStatusFallback(response.status, response.statusText);
 }
 
-/**
- * Lightweight helper for logging: returns a stable string for any
- * error type without throwing.
- */
 export function describeGroqErrorType(type: GroqErrorType): string {
   return `GroqError[${type}]`;
 }

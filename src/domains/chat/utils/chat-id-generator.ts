@@ -1,11 +1,3 @@
-/**
- * Chat ID Generator
- * @description Generates unique message IDs. Delegates randomness
- *              to calculations/random-base36-suffix so the random
- *              source is configurable (and the ID format is unit-testable).
- *
- *              Format: `msg-{timestamp}-{sender}-{counter}-{random}`
- */
 
 import { generateRandomBase36Suffix } from "../../groq/calculations/random-base36-suffix";
 import {
@@ -23,9 +15,6 @@ export class ChatIdGenerator {
     this.randomLength = randomLength;
   }
 
-  /**
-   * Generate a new unique message ID.
-   */
   next(sender: string): string {
     this.counter += 1;
     const random = generateRandomBase36Suffix(this.randomLength);

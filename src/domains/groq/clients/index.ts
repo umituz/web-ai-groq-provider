@@ -1,6 +1,3 @@
-/**
- * Clients Index
- */
 
 export { GroqConfigStore } from "./groq-config-store";
 export { GroqHttpTransport } from "./groq-http-transport";

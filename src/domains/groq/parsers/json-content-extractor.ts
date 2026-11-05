@@ -1,15 +1,3 @@
-/**
- * JSON Content Extractor
- * @description Pure functions for extracting a JSON payload from
- *              model output that may wrap it in a markdown code fence.
- *
- * @example
- * ```typescript
- * extractJsonCandidate('```json\n{"a":1}\n```'); // '{"a":1}'
- * extractJsonCandidate('prefix {"a":1} suffix');   // '{"a":1}'
- * extractJsonCandidate('no json here');           // 'no json here'
- * ```
- */
 
 import { JSON_CODE_BLOCK_PATTERN, JSON_OBJECT_PATTERN } from "../constants/protocol.constants";
 

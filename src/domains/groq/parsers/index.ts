@@ -1,6 +1,3 @@
-/**
- * Parsers Index
- */
 
 export { StreamingResponseParser } from "./streaming-response.parser";
 export type { StreamingParserCallbacks } from "./streaming-response.parser";

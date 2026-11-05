@@ -1,6 +1,3 @@
-/**
- * Groq Hooks Index
- */
 
 export { useGroq } from "./use-groq.hook";
 export type { UseGroqOptions, UseGroqReturn, UseGroqDeps } from "./use-groq.hook";

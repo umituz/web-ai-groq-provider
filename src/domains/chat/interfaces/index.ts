@@ -1,6 +1,3 @@
-/**
- * Chat Interfaces Index
- */
 
 export type {
   IChatService,

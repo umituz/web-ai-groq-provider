@@ -1,10 +1,3 @@
-/**
- * Error Types
- * @description Error type enum and user-friendly message table.
- *              The classification logic (status → type, type → retryable, ...)
- *              lives in the validators/ and resolvers/ folders; this file
- *              only contains the enum and the message table.
- */
 
 export enum GroqErrorType {
   INVALID_API_KEY = "INVALID_API_KEY",

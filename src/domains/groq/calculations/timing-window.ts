@@ -1,19 +1,3 @@
-/**
- * Timing Window Calculator
- * @description Pure function: computes time-based decisions for
- *              debounce and throttle logic. No hardcoded values.
- *
- * @example
- * ```typescript
- * shouldCallOnLeadingEdge({
- *   now: Date.now(),
- *   lastCallTime: 0,
- *   interval: 1000,
- *   leadingEnabled: true,
- *   isThrottled: false,
- * }); // true
- * ```
- */
 
 export interface LeadingEdgeParams {
   readonly now: number;

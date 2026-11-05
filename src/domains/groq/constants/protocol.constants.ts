@@ -1,7 +1,3 @@
-/**
- * Protocol Constants
- * @description Network and protocol-level constants
- */
 
 export const HTTP_HEADERS = {
   CONTENT_TYPE: "Content-Type",

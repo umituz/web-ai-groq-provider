@@ -1,8 +1,3 @@
-/**
- * Debounce and Throttle
- * @description Rate limiting utilities. Delegates timing math
- *              → calculations/timing-window.
- */
 
 import {
   shouldCallOnLeadingEdge,

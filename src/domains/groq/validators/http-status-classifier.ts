@@ -1,18 +1,3 @@
-/**
- * HTTP Status Classifier
- * @description Pure function: maps an HTTP status code to a
- *              {@link GroqErrorType}. No hardcoded HTTP status codes
- *              in the call sites; thresholds are explicit parameters.
- *
- * @example
- * ```typescript
- * classifyHttpStatus(401); // GroqErrorType.INVALID_API_KEY
- * classifyHttpStatus(429); // GroqErrorType.RATE_LIMIT_ERROR
- * classifyHttpStatus(500); // GroqErrorType.SERVER_ERROR
- * classifyHttpStatus(404); // GroqErrorType.CLIENT_ERROR
- * classifyHttpStatus(200); // GroqErrorType.UNKNOWN_ERROR
- * ```
- */
 
 import { GroqErrorType } from "../constants/error-types";
 

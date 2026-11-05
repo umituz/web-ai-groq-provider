@@ -1,6 +1,3 @@
-/**
- * Infrastructure Services Index
- */
 
 export { TextGenerationService } from "./text-generation.service";
 export { GroqHttpClient } from "../clients/groq-http-client";

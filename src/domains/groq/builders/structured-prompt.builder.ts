@@ -1,8 +1,3 @@
-/**
- * Structured Prompt Builder
- * @description Builds user prompts that ask the model to emit JSON,
- *              optionally constrained to a JSON Schema.
- */
 
 export class StructuredPromptBuilder {
   private schema: Record<string, unknown> | undefined;

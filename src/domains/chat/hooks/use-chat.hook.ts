@@ -1,31 +1,3 @@
-/**
- * useChat Hook
- * @description React hook for chat sessions with AI integration.
- *
- *              Features:
- *              - Per-conversation message list with optional storage
- *              - Streaming AI responses (opt-in via `stream: true`)
- *              - Per-component AbortController: cancel in-flight requests
- *                without affecting other consumers
- *              - Errors surface through `onError` (no silent swallowing)
- *              - Storage errors propagate the same way as generation errors
- *
- *              Requires an injected ChatService via the second argument
- *              (typically obtained from `getProvider().chat`).
- *
- * @example
- * ```tsx
- * import { useChat, getProvider } from "@umituz/web-ai-groq-provider";
- *
- * function ChatScreen() {
- *   const { messages, sendMessage, isLoading, isTyping, error } = useChat(
- *     { conversationId: "demo-1" },
- *     { chatService: getProvider()!.chat },
- *   );
- *   // ...
- * }
- * ```
- */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatConfig, ChatMessage } from "../entities";
@@ -64,13 +36,11 @@ export function useChat(options: UseChatOptions, deps?: UseChatDeps): UseChatRet
   const [isTyping, setIsTyping] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Stable refs to keep callback identities stable across renders.
   const storageRef = useRef(storage);
   storageRef.current = storage;
   const callbacksRef = useRef({ onMessageSent, onAIResponse, onError });
   callbacksRef.current = { onMessageSent, onAIResponse, onError };
 
-  // Per-component abort controller; only this component's requests are cancelled.
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const surfaceError = useCallback((err: unknown) => {
@@ -108,7 +78,6 @@ export function useChat(options: UseChatOptions, deps?: UseChatDeps): UseChatRet
     };
   }, [conversationId, surfaceError]);
 
-  // Cleanup on unmount: cancel any in-flight request.
   useEffect(() => {
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -153,8 +122,6 @@ export function useChat(options: UseChatOptions, deps?: UseChatDeps): UseChatRet
         type: type ?? "text",
       };
 
-      // Read the latest messages from the rendered state for AI context.
-      // This is the snapshot we send to the model.
       let contextForAI: ReadonlyArray<ChatMessage> = [];
       setMessages((prev) => {
         contextForAI = prev;
@@ -165,7 +132,6 @@ export function useChat(options: UseChatOptions, deps?: UseChatDeps): UseChatRet
 
       try {
         if (streamEnabled) {
-          // Streaming path: build a placeholder, then patch in chunks.
           const placeholderId = chatIdGenerator.next("assistant");
           const placeholder: ChatMessage = {
             id: placeholderId,
@@ -196,8 +162,6 @@ export function useChat(options: UseChatOptions, deps?: UseChatDeps): UseChatRet
             content: fullText,
             metadata: { ...placeholder.metadata, streaming: false },
           };
-          // Replace placeholder with final message so the persisted version
-          // has stable content and metadata.
           setMessages((prev) =>
             prev.map((m) => (m.id === placeholderId ? finalMessage : m)),
           );
@@ -248,7 +212,6 @@ export function useChat(options: UseChatOptions, deps?: UseChatDeps): UseChatRet
       .find((m) => m.sender === "user");
     if (!lastUserMessage) return null;
 
-    // Drop the trailing AI message (if any) so we can replace it.
     const trimmed =
       currentMessages.length > 0 &&
       currentMessages[currentMessages.length - 1].sender === "assistant"

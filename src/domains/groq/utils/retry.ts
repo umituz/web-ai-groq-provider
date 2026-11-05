@@ -1,10 +1,3 @@
-/**
- * Retry Manager
- * @description Orchestrates retry logic for failed requests. Delegates
- *              the actual delay math → calculations/exponential-backoff
- *              and the error classification → validators/error-classifier.
- *              No hardcoded values; all rules are explicit parameters.
- */
 
 import { GroqError } from "./groq-error";
 import { calculateExponentialBackoff } from "../calculations/exponential-backoff";
@@ -26,7 +19,6 @@ export interface RetryOptions {
   readonly maxDelay?: number;
   readonly backoffMultiplier?: number;
   readonly jitterFactor?: number;
-  /** Custom retry predicate; bypasses the default error-type classifier. */
   readonly shouldRetry?: (error: Error) => boolean;
 }
 
@@ -99,7 +91,6 @@ export class RetryManager {
 
 export const retryManager = new RetryManager();
 
-/** Convenience function: execute `fn` with the default retry manager. */
 export async function withRetry<T>(fn: () => Promise<T>, options?: RetryOptions): Promise<T> {
   return retryManager.execute(fn, options);
 }
